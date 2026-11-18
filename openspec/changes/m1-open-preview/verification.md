@@ -23,8 +23,9 @@ deployed shell. That session is automated as a Playwright suite
   Network Access gate for public pages.
 
 Result — run
-[44318539287](https://github.com/mode777/exo-gltf/actions/runs/44318539287)
-(all jobs success):
+[44324388291](https://github.com/mode777/exo-gltf/actions/runs/44324388291)
+(all jobs success; 8 tests, also reproduced twice against the deployed
+build from the verification server with Chromium 131):
 
 | Job | Result |
 |---|---|
@@ -68,3 +69,8 @@ register records the rule.
   Chromium-family browsers for folder workspaces).
 - Golden-image comparison is out of scope (decision D-11); canvas
   presence plus successful load is the rendering signal.
+- Shell-owned race: if a matching file is opened while plugins are still
+  registering, the shell opens its text fallback and does not switch to
+  the plugin automatically. The suite reopens the file after the plugin
+  mounts, mirroring what a user would do; flag to the exo-editor side if
+  auto-switch is desired.
