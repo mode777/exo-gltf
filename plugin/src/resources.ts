@@ -32,6 +32,8 @@ export interface ProbeResult {
 export interface PrefetchResult {
   /** Loader-visible uri -> blob URL (textures that missed map to the placeholder). */
   urls: Map<string, string>
+  /** Reference uri -> raw bytes, for the document model's IO adapter. */
+  raw: Map<string, Uint8Array<ArrayBuffer>>
   probes: ProbeResult[]
   /** Missing external buffers: without them no scene can render. */
   missingBuffers: ProbeResult[]
@@ -137,6 +139,7 @@ export async function prefetchReferences(
   const concurrency = Math.max(1, options.concurrency ?? 12)
   const createObjectUrl = options.createObjectUrl ?? ((bytes: ArrayBuffer) => URL.createObjectURL(new Blob([bytes])))
   const urls = new Map<string, string>()
+  const raw = new Map<string, Uint8Array<ArrayBuffer>>()
   const probes: ProbeResult[] = []
   const missingBuffers: ProbeResult[] = []
 
@@ -156,6 +159,7 @@ export async function prefetchReferences(
       }
       try {
         const content = await files.readFile(path, 'binary')
+        raw.set(reference.uri, new Uint8Array(content.bytes))
         urls.set(reference.uri, createObjectUrl(content.bytes))
         probes.push({ ...reference, path, ok: true })
       } catch (error) {
@@ -172,7 +176,7 @@ export async function prefetchReferences(
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, references.length) }, worker))
-  return { urls, probes, missingBuffers }
+  return { urls, raw, probes, missingBuffers }
 }
 
 /** Releases every blob URL in the map (data URLs are left alone). */

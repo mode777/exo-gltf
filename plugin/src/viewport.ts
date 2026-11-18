@@ -8,7 +8,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 
@@ -29,6 +29,8 @@ export interface ViewportCallbacks {
 
 export interface Viewport {
   load(bytes: ArrayBuffer, urls: Map<string, string>): Promise<void>
+  /** Frames the glTF node with this index; no-op for unknown/non-spatial nodes. */
+  focusNode(index: number): void
   setTheme(theme: ThemeName): void
   dispose(): void
 }
@@ -38,6 +40,46 @@ interface SceneResources {
   environmentTarget: THREE.WebGLRenderTarget | null
 }
 
+/** Same viewing direction M1 used for the initial auto-frame. */
+const FRAME_DIRECTION = new THREE.Vector3(1, 0.7, 1).normalize()
+
+/**
+ * Fits `camera` to a bounding box along `direction` and returns the box
+ * center so the caller can retarget its controls. Pure framing math: the
+ * only side effect is on the supplied camera.
+ */
+export function frameBounds(
+  box: THREE.Box3,
+  camera: THREE.PerspectiveCamera,
+  direction: THREE.Vector3,
+): THREE.Vector3 | null {
+  if (box.isEmpty()) return null
+  const size = box.getSize(new THREE.Vector3())
+  const center = box.getCenter(new THREE.Vector3())
+  const radius = Math.max(size.length() / 2, 0.001)
+  const distance = radius / Math.max(Math.sin(THREE.MathUtils.degToRad(camera.fov) / 2), 0.1)
+  camera.near = radius / 100
+  camera.far = radius * 100
+  camera.position.copy(center).add(direction.clone().normalize().multiplyScalar(distance))
+  camera.updateProjectionMatrix()
+  return center
+}
+
+/**
+ * Collects the three.js object for each glTF node index from the loader's
+ * association map. Materials and textures are ignored.
+ */
+export function collectNodeObjects(
+  associations: Map<unknown, { nodes?: number }>,
+): Map<number, THREE.Object3D> {
+  const objects = new Map<number, THREE.Object3D>()
+  for (const [object, reference] of associations) {
+    if (reference.nodes === undefined || !(object instanceof THREE.Object3D)) continue
+    if (!objects.has(reference.nodes)) objects.set(reference.nodes, object)
+  }
+  return objects
+}
+
 export function createViewport(host: HTMLElement, callbacks: ViewportCallbacks): Viewport {
   let theme: ThemeName = 'dark'
   let renderer: THREE.WebGLRenderer | null = null
@@ -45,6 +87,7 @@ export function createViewport(host: HTMLElement, callbacks: ViewportCallbacks):
   let controls: OrbitControls | null = null
   let pmrem: THREE.PMREMGenerator | null = null
   let loaded: SceneResources | null = null
+  let nodeObjects = new Map<number, THREE.Object3D>()
   let resizeObserver: ResizeObserver | null = null
   let frameHandle = 0
   let disposed = false
@@ -120,6 +163,7 @@ export function createViewport(host: HTMLElement, callbacks: ViewportCallbacks):
     }
     loaded.environmentTarget?.dispose()
     loaded = null
+    nodeObjects.clear()
   }
 
   const load = async (bytes: ArrayBuffer, urls: Map<string, string>): Promise<void> => {
@@ -149,7 +193,7 @@ export function createViewport(host: HTMLElement, callbacks: ViewportCallbacks):
     loader.setKTX2Loader(ktx2)
     loader.setMeshoptDecoder(MeshoptDecoder)
 
-    const gltf = await new Promise<{ scene: THREE.Group }>((resolve, reject) => {
+    const gltf = await new Promise<GLTF>((resolve, reject) => {
       loader.parse(bytes, '', (result) => resolve(result), (error) => reject(error))
     })
 
@@ -170,18 +214,25 @@ export function createViewport(host: HTMLElement, callbacks: ViewportCallbacks):
       scene.clear()
       return
     }
-    const size = box.getSize(new THREE.Vector3())
-    const center = box.getCenter(new THREE.Vector3())
-    const radius = Math.max(size.length() / 2, 0.001)
-    camera.near = radius / 100
-    camera.far = radius * 100
-    camera.position.copy(center).add(new THREE.Vector3(1, 0.7, 1).normalize().multiplyScalar(radius * 2.3))
-    controls.target.copy(center)
-    camera.updateProjectionMatrix()
+    nodeObjects = collectNodeObjects(gltf.parser.associations)
+    const center = frameBounds(box, camera, FRAME_DIRECTION)
+    if (center) controls.target.copy(center)
     controls.update()
 
     loaded = { scene, environmentTarget }
     resize()
+    requestRender()
+  }
+
+  const focusNode = (index: number): void => {
+    if (!camera || !controls) return
+    const object = nodeObjects.get(index)
+    if (!object) return
+    const box = new THREE.Box3().setFromObject(object)
+    const center = frameBounds(box, camera, FRAME_DIRECTION)
+    if (!center) return
+    controls.target.copy(center)
+    controls.update()
     requestRender()
   }
 
@@ -210,5 +261,5 @@ export function createViewport(host: HTMLElement, callbacks: ViewportCallbacks):
     camera = null
   }
 
-  return { load, setTheme, dispose }
+  return { load, focusNode, setTheme, dispose }
 }

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@exo/plugin-sdk": "1.1.0",
+    "@gltf-transform/core": "^4.5.1",
     "@preact/signals": "^2.11.4",
     "preact": "^11.2.0",
     "three": "^0.181.0"

@@ -95,7 +95,14 @@ extensions included), which also reads and writes both `.gltf` and `.glb`.
 GLB packing for free; the loader's object graph is lossy for structure
 display.
 
-**Status.** Agreed.
+**Status.** Agreed. Implemented in M2 with `@gltf-transform/core`
+**4.5.1**, pinned in `package-lock.json`. Measured bundle impact
+(production build, M2): editor bundle 719.91 kB → 797.71 kB minified
+(+77.80 kB); gzip 199.12 kB → 220.87 kB (+21.75 kB). The library models
+glTF images as `Texture` properties and folds texture definitions into
+`TextureInfo`, so the explorer presents one Textures group rather than
+duplicate Textures/Images groups; each texture entry still carries its
+image URI, MIME type and resolved/missing status.
 
 ### D-06 Serialization policy — always re-serialize via gltf-transform
 
@@ -210,6 +217,10 @@ claims the same glob.
 
 ## Change log
 
+- 2026-11-18 (4) M2 structure explorer implemented: `@gltf-transform/core`
+  4.5.1 added, workspace-backed document IO, lazy explorer model and
+  sidebar/inspector, node focus, reference status, reload/disposal
+  coverage. D-05 records the measured bundle delta.
 - 2026-11-18 (3) exo-editor shipped the requested workspace picker and
   permissioned directory listing, both additively (SDK 1.3.0). M3 is
   unblocked; D-08 records the shipped API, and the M3 UX/permission choice

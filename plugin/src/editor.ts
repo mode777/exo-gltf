@@ -1,11 +1,24 @@
+import type { Document } from '@gltf-transform/core'
+import { effect } from '@preact/signals'
 import { connectBrowserPlugin } from '@exo/plugin-sdk/browser'
-import { mountApp, pushNotice, setFileName, setPhase, viewportHost } from './app'
+import {
+  mountApp,
+  pushNotice,
+  selection,
+  setExplorer,
+  setFileName,
+  setPhase,
+  viewportHost,
+} from './app'
+import { parseDocument } from './document'
+import { buildExplorerModel, focusNodeIndex } from './explorer-model'
 import { GlbParseError, readDocumentJson } from './glb'
 import {
   noticeForDeletion,
   noticeForInvalidDocument,
   noticeForMissingReferences,
   noticeForReadError,
+  noticeForStructureUnavailable,
 } from './notices'
 import {
   collectExternalReferences,
@@ -44,9 +57,12 @@ async function main(): Promise<void> {
   let path = editor.file.path
   let bytes: Uint8Array | null = null
   let resources: PrefetchResult | null = null
+  let documentModel: Document | null = null
   let viewport: Viewport | null = null
   let disposed = false
   const reportReadError = (error: unknown): void => {
+    documentModel = null
+    setExplorer(null)
     if (error instanceof GlbParseError) {
       pushNotice(noticeForInvalidDocument(error.message))
     } else {
@@ -100,6 +116,15 @@ async function main(): Promise<void> {
     )
     console.debug('EXO_GLTF_PROBES', resources.probes)
 
+    const parsed = await parseDocument(bytes, resources)
+    documentModel = parsed.document
+    if (documentModel) {
+      setExplorer(buildExplorerModel(documentModel, resources.probes))
+    } else {
+      setExplorer(null)
+      pushNotice(noticeForStructureUnavailable(parsed.error))
+    }
+
     const missing = noticeForMissingReferences(resources.probes)
     if (missing) pushNotice(missing)
     if (resources.missingBuffers.length > 0) {
@@ -110,6 +135,12 @@ async function main(): Promise<void> {
     await ensureViewport().load(documentBytes, resources.urls)
     setPhase('ready')
   }
+
+  // Node selection is the only spatial action; other kinds never move the camera.
+  const disposeSelectionEffect = effect(() => {
+    const index = focusNodeIndex(selection.value)
+    if (index !== null) viewport?.focusNode(index)
+  })
 
   // M1 performs no edits: every save returns the exact bytes last read.
   editor.onSaveRequest(() => {
@@ -154,12 +185,15 @@ async function main(): Promise<void> {
 
   editor.onDispose(() => {
     disposed = true
+    disposeSelectionEffect()
     viewport?.dispose()
     viewport = null
     if (resources) {
       revokeResourceUrls(resources.urls)
       resources = null
     }
+    documentModel = null
+    setExplorer(null)
     bytes = null
   })
 

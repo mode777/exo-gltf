@@ -101,6 +101,15 @@ export function noticeForInvalidDocument(message: string): Notice {
   }
 }
 
+export function noticeForStructureUnavailable(message: string | null): Notice {
+  return {
+    id: 'structure-unavailable',
+    level: 'warning',
+    title: 'The document structure could not be read',
+    detail: message ?? 'The document could not be parsed for the structure explorer.',
+  }
+}
+
 export function noticeForDeletion(path: string): Notice {
   return {
     id: 'deleted',

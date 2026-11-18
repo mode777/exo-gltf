@@ -22,6 +22,7 @@ declare global {
       hash(path: string): Promise<string>
       size(path: string): number
       touch(path: string): void
+      write(path: string, content: string): void
       remove(path: string): void
       lastError?: string
     }
@@ -138,7 +139,9 @@ async function openFile(page: Page, path: string): Promise<FrameLocator> {
   const segments = path.split('/')
   for (const directory of segments.slice(0, -1)) {
     const row = treeRow(page, directory)
-    await row.dblclick()
+    if ((await row.getAttribute('aria-expanded')) !== 'true') {
+      await row.dblclick()
+    }
     await expect(row).toHaveAttribute('aria-expanded', 'true')
   }
   await treeRow(page, segments[segments.length - 1]).dblclick()
@@ -167,6 +170,30 @@ async function openFixture(page: Page, path: string): Promise<FrameLocator> {
   throw new Error(`The plugin editor never mounted for ${path}.`)
 }
 
+function explorerGroup(frame: FrameLocator, id: string) {
+  return frame.locator(`li[role="treeitem"][data-group="${id}"]`)
+}
+
+function explorerEntry(frame: FrameLocator, id: string) {
+  return frame.locator(`li[role="treeitem"][data-entry-id="${id}"]`)
+}
+
+async function expectGroupCount(frame: FrameLocator, id: string, count: number): Promise<void> {
+  await expect(explorerGroup(frame, id).locator('.tree-count')).toHaveText(String(count))
+}
+
+async function expandGroup(frame: FrameLocator, id: string): Promise<void> {
+  const group = explorerGroup(frame, id)
+  if ((await group.getAttribute('aria-expanded')) !== 'true') {
+    await group.locator('.tree-group-row').click()
+  }
+  await expect(group).toHaveAttribute('aria-expanded', 'true')
+}
+
+function inspectorValue(frame: FrameLocator, label: string) {
+  return frame.locator(`.inspector-row:has(dt:text-is("${label}")) dd`)
+}
+
 test('external references, pass-through save, external change, delete and disposal', async ({
   page,
 }) => {
@@ -191,6 +218,30 @@ test('external references, pass-through save, external change, delete and dispos
     readsAfterOpen,
   )
 
+  await test.step('structure explorer and inspector', async () => {
+    await expect(frame.getByRole('tree', { name: 'Document structure' })).toBeVisible()
+    await expectGroupCount(frame, 'scenes', 1)
+    await expectGroupCount(frame, 'nodes', 2)
+    await expectGroupCount(frame, 'meshes', 1)
+    await expectGroupCount(frame, 'materials', 1)
+    await expectGroupCount(frame, 'textures', 1)
+    await expectGroupCount(frame, 'resources', 2)
+
+    // Groups are collapsed until the user expands them.
+    await expect(frame.locator('[data-entry-id^="nodes:"]')).toHaveCount(0)
+    await expandGroup(frame, 'nodes')
+    await expect(frame.locator('[data-entry-id^="nodes:"]')).toHaveCount(2)
+
+    await explorerEntry(frame, 'nodes:1').locator('.tree-row').click()
+    await expect(explorerEntry(frame, 'nodes:1')).toHaveAttribute('aria-selected', 'true')
+    await expect(inspectorValue(frame, 'Kind')).toHaveText('node')
+    await expect(inspectorValue(frame, 'Name')).toHaveText('Node 1')
+    await expect(inspectorValue(frame, 'Children')).toHaveText('0')
+    await expect(inspectorValue(frame, 'Mesh')).toHaveText('#0 Mesh')
+    await expect(frame.locator('canvas')).toBeVisible()
+    await expect(frame.locator('.notice-error')).toHaveCount(0)
+  })
+
   // Shell Save round-trips the exact bytes and never marks the tab dirty.
   await test.step('save round-trip', async () => {
     const before = await page.evaluate((p) => window.__EXO_E2E__.hash(p), `/${documentPath}`)
@@ -206,18 +257,44 @@ test('external references, pass-through save, external change, delete and dispos
     await expect(page.locator('.tab-close.is-dirty')).toHaveCount(0)
   })
 
-  await test.step('external change reload', async () => {
+  await test.step('external change rebuilds the explorer', async () => {
     const readsBefore = await page.evaluate((p) => window.__EXO_E2E__.reads[p], `/${documentPath}`)
-    await page.evaluate((p) => {
-      window.__EXO_E2E__.touch(p)
-      window.dispatchEvent(new Event('focus'))
-    }, `/${documentPath}`)
+    const source = readFileSync(join(repoRoot, 'plugin', 'test-assets', documentPath), 'utf8')
+    const json = JSON.parse(source) as { nodes: Array<Record<string, unknown>> }
+    json.nodes.push({ name: 'Injected Node' })
+
+    await page.evaluate(
+      ({ p, content }) => {
+        window.__EXO_E2E__.write(p, content)
+        window.dispatchEvent(new Event('focus'))
+      },
+      { p: `/${documentPath}`, content: JSON.stringify(json) },
+    )
     await page.waitForFunction(
       ({ p, previous }) => (window.__EXO_E2E__.reads[p] ?? 0) > previous,
       { p: `/${documentPath}`, previous: readsBefore },
       { timeout: 20_000 },
     )
     await expect(frame.locator('.chrome-phase')).toHaveText('ready')
+
+    // The new structure is shown, expansion reset, and the old selection gone.
+    await expectGroupCount(frame, 'nodes', 3)
+    await expect(explorerGroup(frame, 'nodes')).toHaveAttribute('aria-expanded', 'false')
+    await expect(frame.locator('.inspector-body')).toHaveCount(0)
+    await expect(frame.locator('.inspector')).toContainText('Select an entry')
+  })
+
+  await test.step('tab close disposes the handler', async () => {
+    await page.locator('.tab-close').first().click()
+    await expect(page.locator(iframeSelector)).toHaveCount(0, { timeout: 15_000 })
+  })
+
+  await test.step('reopening builds a fresh explorer', async () => {
+    await openFixture(page, documentPath)
+    await expect(frame.locator('canvas')).toBeVisible()
+    await expectGroupCount(frame, 'nodes', 3)
+    await expect(explorerGroup(frame, 'nodes')).toHaveAttribute('aria-expanded', 'false')
+    await expect(frame.locator('.inspector-body')).toHaveCount(0)
   })
 
   await test.step('external delete notice', async () => {
@@ -228,10 +305,27 @@ test('external references, pass-through save, external change, delete and dispos
     await expect(frame.locator('.notice-error')).toContainText('was deleted from the workspace')
   })
 
-  await test.step('tab close disposes the handler', async () => {
+  await test.step('final disposal', async () => {
     await page.locator('.tab-close').first().click()
     await expect(page.locator(iframeSelector)).toHaveCount(0, { timeout: 15_000 })
   })
+})
+
+test('texture selection shows the external URI and status', async ({ page }) => {
+  await bootstrap(page, [
+    'box-textured/BoxTextured.gltf',
+    'box-textured/BoxTextured0.bin',
+    'box-textured/CesiumLogoFlat.png',
+  ])
+  const frame = await openFixture(page, 'box-textured/BoxTextured.gltf')
+
+  await expandGroup(frame, 'textures')
+  await explorerEntry(frame, 'textures:0').locator('.tree-row').click()
+  await expect(explorerEntry(frame, 'textures:0')).toHaveAttribute('aria-selected', 'true')
+  await expect(inspectorValue(frame, 'Kind')).toHaveText('texture')
+  await expect(inspectorValue(frame, 'URI')).toHaveText('CesiumLogoFlat.png')
+  await expect(inspectorValue(frame, 'Status')).toHaveText('resolved')
+  await expect(frame.locator('.status-resolved')).toBeVisible()
 })
 
 test('self-contained GLB renders', async ({ page }) => {
@@ -266,7 +360,7 @@ test('KTX2-textured mesh renders with vendored transcoders', async ({ page }) =>
   await expect(frame.locator('.notice-error')).toHaveCount(0)
 })
 
-test('missing texture renders a placeholder and a named warning', async ({ page }) => {
+test('missing texture renders a placeholder and is flagged in the explorer', async ({ page }) => {
   await bootstrap(page, [
     'box-missing-texture/BoxTextured.gltf',
     'box-missing-texture/BoxTextured0.bin',
@@ -274,13 +368,36 @@ test('missing texture renders a placeholder and a named warning', async ({ page 
   const frame = await openFixture(page, 'box-missing-texture/BoxTextured.gltf')
   await expect(frame.locator('canvas')).toBeVisible()
   await expect(frame.locator('.notice-warning')).toContainText('missing.png')
+
+  await expectGroupCount(frame, 'resources', 2)
+  await expect(explorerGroup(frame, 'resources').locator('.badge-missing')).toHaveCount(1)
+  await expandGroup(frame, 'resources')
+  const missing = explorerEntry(frame, 'resources:1')
+  await expect(missing.locator('.tree-name')).toHaveText('missing.png')
+  await expect(missing.locator('.tree-detail')).toHaveText('image · missing')
+  await expect(missing.locator('.badge-missing')).toBeVisible()
+  await missing.locator('.tree-row').click()
+  await expect(inspectorValue(frame, 'Kind')).toHaveText('resource')
+  await expect(inspectorValue(frame, 'Resource')).toHaveText('image')
+  await expect(inspectorValue(frame, 'URI')).toHaveText('missing.png')
+  await expect(inspectorValue(frame, 'Status')).toHaveText('missing')
+  await expect(frame.locator('.status-missing')).toBeVisible()
 })
 
-test('missing buffer blocks the scene with an explicit error', async ({ page }) => {
+test('missing buffer blocks the scene while the structure stays browsable', async ({ page }) => {
   await bootstrap(page, ['missing-buffer/scene.gltf'])
   const frame = await openFile(page, 'missing-buffer/scene.gltf')
   await expect(frame.locator('.notice-error')).toContainText('missing.bin', { timeout: 60_000 })
   await expect(frame.locator('canvas')).toHaveCount(0)
+
+  await expectGroupCount(frame, 'scenes', 1)
+  await expectGroupCount(frame, 'resources', 1)
+  await expandGroup(frame, 'resources')
+  const missing = explorerEntry(frame, 'resources:0')
+  await expect(missing.locator('.tree-name')).toHaveText('missing.bin')
+  await expect(missing.locator('.badge-missing')).toBeVisible()
+  await missing.locator('.tree-row').click()
+  await expect(inspectorValue(frame, 'Status')).toHaveText('missing')
 })
 
 test('oversized file shows the too-large state', async ({ page }) => {

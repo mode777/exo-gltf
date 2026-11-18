@@ -12,6 +12,7 @@
  *   writes       per-path createWritable().close() counters
  *   hash(path)   SHA-256 hex of current bytes
  *   touch(path)  bump lastModified (simulates an external edit)
+ *   write(path, text) replace contents and bump lastModified
  *   remove(path) delete a file (simulates an external delete)
  */
 (() => {
@@ -242,6 +243,11 @@
     },
     touch(path) {
       const node = findNode(path)
+      node.lastModified += 1000
+    },
+    write(path, content) {
+      const node = findNode(path)
+      node.content = typeof content === 'string' ? encoder.encode(content) : new Uint8Array(content)
       node.lastModified += 1000
     },
     remove(path) {
