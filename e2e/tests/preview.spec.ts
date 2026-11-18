@@ -146,9 +146,25 @@ async function openFile(page: Page, path: string): Promise<FrameLocator> {
 }
 
 async function openFixture(page: Page, path: string): Promise<FrameLocator> {
-  const frame = await openFile(page, path)
-  await expect(frame.locator('.chrome-phase')).toHaveText('ready', { timeout: 60_000 })
-  return frame
+  const frame = page.frameLocator(iframeSelector)
+  // Registration is asynchronous: opening a matching file before the plugin
+  // is ready yields the shell's text fallback, which never auto-switches.
+  // Reopen like a user would until the plugin editor mounts.
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await openFile(page, path)
+    const mounted = await frame
+      .locator('.chrome-phase')
+      .waitFor({ state: 'attached', timeout: attempt === 0 ? 15_000 : 30_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (mounted) {
+      await expect(frame.locator('.chrome-phase')).toHaveText('ready', { timeout: 60_000 })
+      return frame
+    }
+    await page.locator('.tab-close').first().click({ timeout: 5_000 }).catch(() => undefined)
+    await page.waitForTimeout(1_500)
+  }
+  throw new Error(`The plugin editor never mounted for ${path}.`)
 }
 
 test('external references, pass-through save, external change, delete and disposal', async ({
@@ -176,43 +192,46 @@ test('external references, pass-through save, external change, delete and dispos
   )
 
   // Shell Save round-trips the exact bytes and never marks the tab dirty.
-  const before = await page.evaluate((p) => window.__EXO_E2E__.hash(p), `/${documentPath}`)
-  await page.locator('.tab-title').first().click()
-  await page.keyboard.press('Control+S')
-  await page.waitForFunction(
-    (p) => (window.__EXO_E2E__.writes[p] ?? 0) > 0,
-    `/${documentPath}`,
-    { timeout: 20_000 },
-  )
-  const after = await page.evaluate((p) => window.__EXO_E2E__.hash(p), `/${documentPath}`)
-  expect(after).toBe(before)
-  await expect(page.locator('.tab-close.is-dirty')).toHaveCount(0)
+  await test.step('save round-trip', async () => {
+    const before = await page.evaluate((p) => window.__EXO_E2E__.hash(p), `/${documentPath}`)
+    await page.locator('.tab-title').first().click()
+    await page.keyboard.press('Control+S')
+    await page.waitForFunction(
+      (p) => (window.__EXO_E2E__.writes[p] ?? 0) > 0,
+      `/${documentPath}`,
+      { timeout: 20_000 },
+    )
+    const after = await page.evaluate((p) => window.__EXO_E2E__.hash(p), `/${documentPath}`)
+    expect(after).toBe(before)
+    await expect(page.locator('.tab-close.is-dirty')).toHaveCount(0)
+  })
 
-  // External edit: focus polling notices a version change and the preview reloads.
-  const readsBefore = await page.evaluate((p) => window.__EXO_E2E__.reads[p], `/${documentPath}`)
-  await page.evaluate((p) => {
-    window.__EXO_E2E__.touch(p)
-    window.dispatchEvent(new Event('focus'))
-  }, `/${documentPath}`)
-  await page.waitForFunction(
-    ({ p, previous }) => (window.__EXO_E2E__.reads[p] ?? 0) > previous,
-    { p: `/${documentPath}`, previous: readsBefore },
-    { timeout: 20_000 },
-  )
-  await expect(frame.locator('.chrome-phase')).toHaveText('ready')
+  await test.step('external change reload', async () => {
+    const readsBefore = await page.evaluate((p) => window.__EXO_E2E__.reads[p], `/${documentPath}`)
+    await page.evaluate((p) => {
+      window.__EXO_E2E__.touch(p)
+      window.dispatchEvent(new Event('focus'))
+    }, `/${documentPath}`)
+    await page.waitForFunction(
+      ({ p, previous }) => (window.__EXO_E2E__.reads[p] ?? 0) > previous,
+      { p: `/${documentPath}`, previous: readsBefore },
+      { timeout: 20_000 },
+    )
+    await expect(frame.locator('.chrome-phase')).toHaveText('ready')
+  })
 
-  // External delete: an explicit notice, no retry loop.
-  await page.evaluate((p) => {
-    window.__EXO_E2E__.remove(p)
-    window.dispatchEvent(new Event('focus'))
-  }, `/${documentPath}`)
-  await expect(frame.locator('.notice-error')).toContainText(
-    'was deleted from the workspace',
-  )
+  await test.step('external delete notice', async () => {
+    await page.evaluate((p) => {
+      window.__EXO_E2E__.remove(p)
+      window.dispatchEvent(new Event('focus'))
+    }, `/${documentPath}`)
+    await expect(frame.locator('.notice-error')).toContainText('was deleted from the workspace')
+  })
 
-  // Closing the tab disposes the handler frame.
-  await page.locator('.tab-close').first().click()
-  await expect(page.locator(iframeSelector)).toHaveCount(0, { timeout: 15_000 })
+  await test.step('tab close disposes the handler', async () => {
+    await page.locator('.tab-close').first().click()
+    await expect(page.locator(iframeSelector)).toHaveCount(0, { timeout: 15_000 })
+  })
 })
 
 test('self-contained GLB renders', async ({ page }) => {

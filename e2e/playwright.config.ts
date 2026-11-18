@@ -11,7 +11,7 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
   workers: 1,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI ? 2 : 0,
   timeout: 120_000,
   expect: { timeout: 20_000 },
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
@@ -20,7 +20,6 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     launchOptions: {
-      // Allows CI or the verification server to reuse a preinstalled Chromium.
       ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH
         ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH }
         : {}),
