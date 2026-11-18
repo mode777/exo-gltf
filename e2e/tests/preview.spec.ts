@@ -34,26 +34,41 @@ const iframeSelector = 'iframe[title="glTF editor"]'
 
 const deployed = process.env.EXO_EXPECT_DEPLOYED === '1'
 
-/** Fails fast unless the deployed artifact is the build from this checkout. */
+/** Fails fast unless the deployed artifact is fully served for this checkout. */
 async function waitForDeployedBuild(): Promise<void> {
   const manifestUrl = process.env.EXO_MANIFEST_URL
   if (!manifestUrl) throw new Error('EXO_EXPECT_DEPLOYED requires EXO_MANIFEST_URL')
-  const editorHtml = readFileSync(join(repoRoot, 'plugin', 'dist', 'editor.html'), 'utf8')
-  const match = editorHtml.match(/assets\/editor-[^"]+\.js/)
-  if (!match) throw new Error('Local plugin/dist/editor.html has no hashed editor asset.')
-  const expected = match[0]
   const pluginBase = manifestUrl.replace(/\/exo-manifest\.json$/, '')
+
+  const expectedAssets = ['plugin.html', 'editor.html'].map((page) => {
+    const html = readFileSync(join(repoRoot, 'plugin', 'dist', page), 'utf8')
+    const match = html.match(/assets\/[a-z]+-[^"]+\.js/)
+    if (!match) throw new Error(`Local plugin/dist/${page} has no hashed script asset.`)
+    return { page, asset: match[0] }
+  })
+
   const deadline = Date.now() + 180_000
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${pluginBase}/editor.html`, { cache: 'no-store' })
-      if (response.ok && (await response.text()).includes(expected)) return
+      const pages = await Promise.all(
+        expectedAssets.map(async ({ page, asset }) => {
+          const response = await fetch(`${pluginBase}/${page}`, { cache: 'no-store' })
+          if (!response.ok) return false
+          return (await response.text()).includes(asset)
+        }),
+      )
+      if (pages.every(Boolean)) {
+        const assets = await Promise.all(
+          expectedAssets.map(({ asset }) => fetch(`${pluginBase}/${asset}`, { cache: 'no-store' })),
+        )
+        if (assets.every((response) => response.ok)) return
+      }
     } catch {
       // Pages may still be propagating the new deployment; retry.
     }
     await new Promise((resolve) => setTimeout(resolve, 5_000))
   }
-  throw new Error(`Deployed plugin never served this build (${expected}).`)
+  throw new Error('Deployed plugin never served this build for plugin.html and editor.html.')
 }
 
 if (deployed) {
