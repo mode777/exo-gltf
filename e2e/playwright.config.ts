@@ -1,11 +1,11 @@
 import { defineConfig } from '@playwright/test'
 
-const PORT = Number(process.env.E2E_PORT ?? 4173)
-
 /**
  * End-to-end verification against the deployed Exo shell. The plugin under
- * test is either the local production build (served by fixtures-server.mjs at
- * /exo-gltf/) or the deployed Pages build, selected via EXO_MANIFEST_URL.
+ * test is either the local production build or the deployed Pages build,
+ * selected via EXO_MANIFEST_URL. Plugin files and workspace fixtures are
+ * served through request interception at a fake https origin (see
+ * fixture-router.ts), so no local server or port is involved.
  */
 export default defineConfig({
   testDir: './tests',
@@ -25,16 +25,6 @@ export default defineConfig({
         ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH }
         : {}),
       args: ['--enable-unsafe-swiftshader', '--disable-dev-shm-usage'],
-    },
-  },
-  webServer: {
-    command: 'node fixtures-server.mjs',
-    url: `http://localhost:${PORT}/health`,
-    reuseExistingServer: !process.env.CI,
-    env: {
-      E2E_PORT: String(PORT),
-      EXO_MANIFEST_URL:
-        process.env.EXO_MANIFEST_URL ?? `http://localhost:${PORT}/exo-gltf/exo-manifest.json`,
     },
   },
 })

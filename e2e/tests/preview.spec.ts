@@ -2,15 +2,16 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type FrameLocator, type Page } from '@playwright/test'
+import { fixtureBase, installFixtureRoutes } from '../fixture-router'
 
 /**
  * End-to-end verification of the glTF preview against the real Exo shell.
  *
  * The shell runs on GitHub Pages; the plugin under test is either the local
- * production build served from localhost (default) or the deployed Pages
- * build (EXO_MANIFEST_URL overrides the manifest). The workspace is a fake
- * File System Access handle seeded from the fixture server, so the folder
- * picker flow is exercised for real without interactive dialogs.
+ * production build (default) or the deployed Pages build (EXO_MANIFEST_URL).
+ * Plugin files and workspace fixtures are served through request
+ * interception at a fake https origin, so the folder-picker flow is
+ * exercised for real without interactive dialogs or local ports.
  */
 
 declare global {
@@ -28,7 +29,6 @@ declare global {
 }
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
-const fixtureBase = process.env.E2E_FIXTURE_BASE ?? 'http://localhost:4173/fixtures'
 const fakeFsaSource = readFileSync(join(repoRoot, 'e2e', 'fake-fsa.js'), 'utf8')
 const iframeSelector = 'iframe[title="glTF editor"]'
 
@@ -83,13 +83,14 @@ async function bootstrap(page: Page, fixturePaths: string[]): Promise<void> {
     name: 'e2e-workspace',
     paths: ['exo.json', ...fixturePaths],
   }
+  await installFixtureRoutes(page)
   await page.addInitScript({ content: fakeFsaSource })
   await page.addInitScript({ content: `window.__EXO_E2E_CONFIG__ = ${JSON.stringify(config)};` })
   page.on('console', (message) => {
     if (message.text().includes('EXO_E2E')) console.log('[e2e console]', message.text())
   })
   page.on('requestfailed', (request) => {
-    if (request.url().includes('localhost')) {
+    if (request.url().includes('exo-gltf-e2e.test')) {
       console.log('[e2e requestfailed]', request.url(), request.failure()?.errorText)
     }
   })
