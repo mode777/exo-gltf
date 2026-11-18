@@ -229,6 +229,24 @@ test('Draco-compressed mesh renders with vendored decoders', async ({ page }) =>
   await expect(frame.locator('.notice-error')).toHaveCount(0)
 })
 
+test('KTX2-textured mesh renders with vendored transcoders', async ({ page }) => {
+  await bootstrap(page, [
+    'chronograph-watch/ChronographWatch.gltf',
+    'chronograph-watch/ChronographWatch.data.bin',
+    'chronograph-watch/band_occlusion.ktx2',
+    'chronograph-watch/carbonfiber_normal.ktx2',
+    'chronograph-watch/dgg_basecolor.ktx2',
+    'chronograph-watch/dgg_rm.ktx2',
+    'chronograph-watch/khronos_basecolor.ktx2',
+    'chronograph-watch/khronos_rm.ktx2',
+    'chronograph-watch/watchface_basecolor.ktx2',
+    'chronograph-watch/watchface_orm.ktx2',
+  ])
+  const frame = await openFixture(page, 'chronograph-watch/ChronographWatch.gltf')
+  await expect(frame.locator('canvas')).toBeVisible()
+  await expect(frame.locator('.notice-error')).toHaveCount(0)
+})
+
 test('missing texture renders a placeholder and a named warning', async ({ page }) => {
   await bootstrap(page, [
     'box-missing-texture/BoxTextured.gltf',
