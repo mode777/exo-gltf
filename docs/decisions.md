@@ -12,19 +12,21 @@ iterations open new entries here; they do not silently amend these.
 
 Source: exo-editor contracts,
 <https://github.com/mode777/exo-editor/tree/main/docs/contracts> (read
+2026-11-18; workspace-access update re-checked against `feb5461` on
 2026-11-18). These shape every design below.
 
 | # | Constraint | Consequence for exo-gltf |
 |---|---|---|
-| C1 | The plugin protocol has **no directory listing**; reads are `plugin/request-file` by path only | Missing-reference resolution cannot offer a workspace browser today; see D-08 and `docs/exo-editor-api-request.md` |
+| C1 | Reads are `plugin/request-file` by exact path. Discovery is limited to the shell-owned user picker (`plugin/request-files`, SDK 1.2.0+) and **one-level** directory listing behind `workspace:list` (`plugin/request-list`, SDK 1.3.0+) | Missing-reference resolution can use a picker and/or listing (D-08); recursive traversal, globbing and search remain unavailable |
 | C2 | A plugin **writes only its own open document**, via the `onSaveRequest` handler (`{ text }` / `{ bytes }`) | Re-linking a reference means rewriting the `uri` inside the glTF; the plugin can never copy/move the referenced file |
 | C3 | Save handler must answer within **5 s**; reads capped by `editor.limits` (default 16 MiB); message payload cap 16 MiB | Serialize ahead of the save request (debounced); mandatory explicit "too large" state |
 | C4 | A visible surface requires `rendering: "frame"` in the manifest contribution | The 3D viewport is a visible handler frame; shell owns tabs/header/Save |
 | C5 | Cross-origin plugin (GitHub Pages) keeps its own storage (`allow-scripts allow-same-origin`) | Viewport preferences may use `localStorage` |
 | C6 | Max **20 handler frames** per plugin per workspace; each open file is one frame with its own engine instance | Lazy viewport init; full disposal on `onDispose` |
-| C7 | Widening permissions, globs or switching to `rendering: "frame"` later **re-prompts every user's consent** | Choose the v1 permission set once, for the whole iteration (D-02) |
+| C7 | Widening permissions, globs or switching to `rendering: "frame"` later **re-prompts every user's consent** | Choose the v1 permission set deliberately; any later addition re-prompts (D-02, C10) |
 | C8 | Manifest globs **do** support brace alternation per the contract (`**/*.{gltf,glb}`) — the vendored skill's "no braces" note is outdated, and the skill itself defers to the contracts | One editor entry covers both extensions |
 | C9 | Reads of `/exo.json` and `/.exo/**` are denied; bytes arrive only through `editor.readFile()`; no postMessage outside the vendored SDK | Hard rules; restated because they are security-relevant |
+| C10 | `workspace:list` is a separate manifest permission that requires `workspace:read`; adding it to an already-approved plugin **re-prompts every user**. The shell picker needs only `workspace:read` | Pick only what M3 needs: the picker adds no consent prompt; listing does (D-08) |
 
 ## Decisions
 
@@ -41,7 +43,7 @@ informed by two milestones of read-path experience.
 
 **Status.** Agreed.
 
-### D-02 Manifest permissions — `workspace:write` + `events:subscribe`
+### D-02 Manifest permissions — `workspace:read` + `workspace:write` + `events:subscribe`
 
 **Decision.** v1 declares `workspace:read`, `workspace:write` and
 `events:subscribe`. The shell's semantic validator requires `workspace:read`
@@ -54,7 +56,11 @@ stable consent surface for the whole iteration.
 **Rationale.** C7: any later widening re-prompts every user, so the set is
 chosen once for everything the iteration needs.
 
-**Status.** Agreed.
+**Status.** Agreed. The 2026-11-18 upstream listing capability adds a possible
+`workspace:list` grant that did not exist when this set was chosen; adding it
+later re-prompts every user (C7/C10). Whether M3 needs it is tracked in D-08
+and the M3 OpenSpec change; the current manifest stays `workspace:read`,
+`workspace:write` and `events:subscribe`.
 
 ### D-03 Identity — `io.github.mode777.gltf`
 
@@ -118,19 +124,25 @@ the specific pick; the lightweight option fits because three.js dominates
 the surface and no React-only dependency (e.g. react-three-fiber) is
 planned — the three.js integration stays imperative.
 
-### D-08 Missing-reference UX — deferred; blocked on upstream exo-editor API
+### D-08 Missing-reference UX — upstream API available; UX deferred to the M3 change
 
-**Decision.** The M3 interaction design is deferred. The plugin protocol
-cannot list or browse the workspace (C1), so the owner will request an
-upstream exo-editor extension (workspace file picker and/or directory
-listing for plugins). M3's UX is designed once that API's shape is known.
+**Decision.** The upstream dependency is satisfied. exo-editor shipped both
+requested capabilities on 2026-11-18: the shell-owned workspace picker
+(`plugin/request-files` / `shell/files-selected`, SDK 1.2.0) and permissioned
+one-level directory listing (`plugin/request-list` / `shell/list-result`,
+`workspace:list`, SDK 1.3.0). M3's concrete interaction is designed in its
+OpenSpec change against that API; this register does not yet choose between
+the picker, listing, or both.
 
-**Rationale.** A manual path-entry-only UX would be the fallback for every
-future plugin; extending the platform once benefits the whole ecosystem.
+**Rationale.** Both designs remove the blind-typing fallback, but they differ
+in consent: the picker uses the existing `workspace:read`, while listing adds
+the separate `workspace:list`, which re-prompts users (C10). The choice
+belongs with the M3 UX, informed by the reference-repair flow.
 
-**Status.** Agreed. Change request drafted in
-`docs/exo-editor-api-request.md`, to be forwarded to exo-editor
-development. M3 is blocked on its outcome (fallback: manual path entry).
+**Status.** Unblocked 2026-11-18. The shipped API is recorded in
+`docs/exo-editor-api-request.md` section 8, including its differences from
+the request. The SDK vendored here is `1.1.0` and must be refreshed to
+upstream `1.3.0` when M3 starts (D-13).
 
 ### D-09 Validation — missing-reference checks only
 
@@ -191,11 +203,17 @@ claims the same glob.
 - **`contributes.configuration`** (workspace settings such as lighting or
   grid defaults) — deferred; would use the already-granted `config/changed`
   channel, no new permission needed.
-- **M3 unblocked**: outcome of `docs/exo-editor-api-request.md`. Owner
-  confirmed the blocker is acceptable for now; M1/M2 proceed independently.
+- **M3 UX and permission set**: choose picker, listing, or both in the M3
+  OpenSpec change. Only listing adds `workspace:list` and re-prompts every
+  user (C10); the picker needs no permission change. Refresh the vendored
+  SDK from `1.1.0` to upstream `1.3.0` at the same time.
 
 ## Change log
 
+- 2026-11-18 (3) exo-editor shipped the requested workspace picker and
+  permissioned directory listing, both additively (SDK 1.3.0). M3 is
+  unblocked; D-08 records the shipped API, and the M3 UX/permission choice
+  remains open.
 - 2026-11-18 (2) Owner closed the open defaults: license is MIT; UI stack
   is Preact (lightweight pick delegated). M3 blocker accepted as-is.
 - 2026-11-18 (1) Initial register created from the first-iteration

@@ -5,8 +5,17 @@
 **Date:** 2026-11-18
 **Target contracts:** `docs/contracts/plugin-protocol.md` (v1),
 `docs/contracts/plugin-sdk.md` (v1), `docs/contracts/workspace-api.md` (v1)
-**Kind:** additive within protocol major 1 (subject to the open questions in
-section 6)
+**Kind:** additive within protocol major 1 (open questions resolved 2026-11-18;
+see section 6)
+
+> **Resolved 2026-11-18.** exo-editor shipped both designs: the shell-owned
+> workspace picker (`plugin/request-files` / `shell/files-selected`, SDK
+> `1.2.0`) and permissioned one-level directory listing
+> (`plugin/request-list` / `shell/list-result` with the `workspace:list`
+> permission, SDK `1.3.0`). Protocol major, manifest schema and existing
+> consents are unchanged. Section 6 now records the answers and section 8
+> the shipped shape and its differences from this request. Kept as the
+> historical ask; M3 is unblocked.
 
 This document is written so it can be dropped into an exo-editor OpenSpec
 change with minimal editing. It follows the repo's own rules: contracts
@@ -159,20 +168,42 @@ Steps 1-2 and 5-6 work on current shells already; only step 3-4 needs this
 change. The fallback on shells without the message is a manual path input
 validated by read.
 
-## 6. Open questions for exo-editor
+## 6. Open questions for exo-editor (answered 2026-11-18)
 
 1. Should design B's capability be covered by `workspace:read` or a new
    `workspace:list` permission (consent-fingerprint implications)?
+   **Answered:** a separate `workspace:list` permission. It requires
+   `workspace:read`; adding it changes the consent fingerprint and
+   re-prompts an already-approved reader, while read-only plugins keep
+   their stored consent.
 2. Does `capabilities.requestFiles` in `shell/init` already anticipate
    design A, or is the bit currently vestigial (in which case: is a
    picker on the shell roadmap independently)?
+   **Answered:** `requestFiles` remains the permission bit. A new
+   `capabilities.filePicker` support bit was added for the shell-owned
+   picker, and `capabilities.directoryListing` for listing; older shells
+   omit both and the SDK treats them as false.
 3. Entry-count cap and rate-limit values for listing; depth limit policy.
+   **Answered:** one directory level only, 1,000 entries per page with an
+   opaque `nextCursor`, at most four in-flight listing requests per frame
+   and twenty per rolling second, and a five-second page deadline. Pages
+   come from a handler-bound snapshot cache; recursive listing, globbing
+   and search remain out of scope.
 4. Should the picker accept a starting directory hint from the plugin
    (e.g. the open file's dir), or always open at the workspace root to
    avoid leaking that the plugin knows a directory exists?
+   **Answered:** an optional `directory` start hint is accepted, normalized
+   and contained. It is not a grant; the shell silently falls back to the
+   handler file's directory when the hint is absent, invalid, reserved or
+   missing. The plugin cannot supply any other picker text or a
+   preselection.
 5. Interaction with the Stratofold provider: `list()` is server-backed
    there; do picker and listing need provider capability flags
    (cf. `WorkspaceCapabilities`)?
+   **Answered:** no provider change and no new flags. Both features go
+   through the existing `forPlugin(pluginId).list()` facade, so the remote
+   provider works like the folder provider; the new bounds are enforced in
+   the shell broker, not the provider.
 
 ## 7. Alternatives considered (and why insufficient)
 
@@ -183,6 +214,82 @@ validated by read.
 - **Guessing/probing**: allowed today, but only finds files whose exact
   path the plugin can construct; useless after renames and generates
   noise in the workspace log.
+
+## 8. Resolution in exo-editor (2026-11-18)
+
+Checked against exo-editor `main` (`feb5461`, "Record plugin workspace
+listing verification"; contracts re-read 2026-11-18). Relevant upstream
+commits: `a868f08` (file picker), `f274a59` (directory listing), with
+verification recorded in `3554812`, `5aa1382` and `feb5461`. OpenSpec
+changes: `plugin-file-picker` (implemented and verified; SDK `1.2.0`) and
+`plugin-workspace-listing` (implemented and verified; SDK `1.3.0`).
+
+Both core designs were accepted, additively, with protocol `1`, manifest
+schema `1` and shell `0.1.0`. The only dropped detail is the advisory
+`accept` extension filter (see Design A below); the rest of the request was
+implemented as proposed.
+
+### Design A — shipped
+
+- Wire messages: `plugin/request-files { multiple?, directory? }` and
+  `shell/files-selected { paths }`, where `[]` means the user cancelled.
+- Requires `workspace:read` and `capabilities.filePicker`; the request is
+  rejected unless the handler is active, visible, focused and not
+  disposing. One picker per frame; a second request is `rate-limited`.
+- The picker is shell-owned and lazy-lists the workspace through the
+  plugin-scoped facade. `/exo.json` and `/.exo/**` are never shown or
+  returned; the plugin cannot supply a title, message or preselection.
+- Replies carry `/`-rooted paths only. Content is still read through
+  `plugin/request-file`.
+- Deviations from this request: the advisory `accept` extension filter was
+  **not** implemented (upstream records it as future work), and
+  cancellation is an empty `files-selected`, not an `aborted` error.
+  `multiple` selections are capped at 32 paths in selection order.
+- SDK: `editor.requestFiles()` with local `unsupported-message`,
+  `permission-denied` and `rate-limited` preflight; manual path entry
+  remains the fallback on shells without the support bit.
+
+### Design B — shipped
+
+- Wire messages: `plugin/request-list { path, cursor? }` and
+  `shell/list-result { entries, nextCursor? }`, with
+  `DirectoryEntry = { path, kind: 'file' | 'directory', size? }`.
+- Requires the new manifest permission `workspace:list` (which requires
+  `workspace:read`); `capabilities.directoryListing` is the shell support
+  bit, not a permission. A handler without the permission gets
+  `permission-denied` and no listing is performed.
+- One directory level only. Pages hold up to 1,000 direct children from a
+  handler-bound snapshot, sorted directories before files then by path;
+  an invalid or expired cursor is `not-found` and the plugin relists.
+- Reserved entries are filtered and reserved directories denied. Entries
+  carry no `mtime`, version, content, handle, `File` or `Blob`.
+- Limits: four in-flight listings per frame, twenty per rolling second,
+  five-second page deadline; snapshots are dropped on disposal, tab close,
+  plugin removal and workspace switch. Listing is neither a watcher nor a
+  write grant.
+- SDK: `editor.listDirectory(path, { cursor? })` with
+  `unsupported-message`/`permission-denied` preflight, opaque cursor
+  pass-through and `readFile()` / picker as fallbacks.
+
+### Consequences for exo-gltf
+
+- M3 is unblocked. Its relink UX can use the picker, listing, or both; the
+  choice is M3 design work, not settled by this request.
+- The picker adds no permission. Listing requires adding `workspace:list`
+  to the manifest, which changes the consent fingerprint and **re-prompts
+  every user** (D-08 / C10 in `docs/decisions.md`).
+- The SDK vendored in this repository is `1.1.0`; it must be refreshed
+  unmodified to upstream `1.3.0` before M3 uses either helper (D-13).
+
+Contract references:
+
+- [`plugin-protocol.md` §5.2.1](https://github.com/mode777/exo-editor/blob/main/docs/contracts/plugin-protocol.md#521-user-mediated-file-selection)
+  and [§5.2.2](https://github.com/mode777/exo-editor/blob/main/docs/contracts/plugin-protocol.md#522-permissioned-directory-listing)
+- [`plugin-sdk.md` §7](https://github.com/mode777/exo-editor/blob/main/docs/contracts/plugin-sdk.md#7-editor-client)
+- [`plugin-manifest.md` §3](https://github.com/mode777/exo-editor/blob/main/docs/contracts/plugin-manifest.md#fields)
+  (permissions) and
+  [§6](https://github.com/mode777/exo-editor/blob/main/docs/contracts/plugin-manifest.md#6-consent)
+  (consent fingerprint)
 
 ---
 

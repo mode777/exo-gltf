@@ -8,8 +8,9 @@ next begins. Work on a milestone is managed as an OpenSpec change under
 
 ```text
 M1 open + preview   ->   M2 structure explorer   ->   M3 reference tweaks
- (archived 2026-11-18)        (planned)              (blocked upstream)
-                                                        docs/exo-editor-api-request.md
+ (archived 2026-11-18)        (planned)              (unblocked 2026-11-18)
+                                                       upstream API shipped
+                                                       (SDK 1.3.0; vendored SDK is 1.1.0)
 ```
 
 ## M1 — Open + 3D preview
@@ -75,15 +76,25 @@ nodes navigates the viewport; missing references are visibly flagged.
 **Goal.** Resolve missing external references (the "small tweaks" of the
 repo goals) and save the repaired file.
 
-**Blocked** on the upstream exo-editor API extension requested in
-[docs/exo-editor-api-request.md](exo-editor-api-request.md) (workspace
-file picker and/or listing). Owner has accepted the blocker; M1/M2
-proceed independently. Fallback if the API lands differently or not at
-all: manual path entry validated by read.
+**Unblocked 2026-11-18.** exo-editor shipped the requested API: the
+shell-owned workspace picker (`plugin/request-files` / `shell/files-selected`,
+SDK 1.2.0) and permissioned one-level directory listing (`plugin/request-list`
+/ `shell/list-result`, manifest permission `workspace:list`, SDK 1.3.0). See
+[docs/exo-editor-api-request.md](exo-editor-api-request.md) section 8 for the
+shipped shape and differences. M1 is archived; M2 is unaffected.
 
-Scope (once unblocked, UX finalized against the actual API):
+The relink UX is the first task of the M3 OpenSpec change. The picker needs
+no permission change; listing adds `workspace:list` and re-prompts every
+user (C10/D-08). Either path also requires refreshing the vendored SDK from
+`1.1.0` to upstream `1.3.0`.
 
-- Relink flow for missing buffer/texture uris using the upstream API.
+Scope (UX finalized in the M3 OpenSpec change):
+
+- Relink flow for missing buffer/texture uris through the shell picker
+  (`editor.requestFiles()`) and/or permissioned listing
+  (`editor.listDirectory()`); manual path entry remains the old-shell
+  fallback.
+- Refresh the vendored `@exo/plugin-sdk` to `1.3.0`, unmodified (D-13).
 - Edits through the gltf-transform document; dirty lifecycle via
   `editor.setDirty()`; save re-serializes (`.gltf` as text, `.glb` as
   bytes) with debounced pre-serialization to answer within 5 s — D-06.

@@ -11,13 +11,19 @@ context: |
   three.js (WebGL2) renders, @gltf-transform models structure and
   serialization, Preact (React API) builds the editor UI, one manifest
   editor entry for **/*.{gltf,glb} with rendering "frame", permissions
-  workspace:write + events:subscribe, vendored DRACO/KTX2/Meshopt decoders,
-  npm-workspaces layout with an unmodified vendored @exo/plugin-sdk.
-  Hard platform constraints: no workspace listing exists in the plugin
-  protocol; a plugin writes only its own open document; design around
-  editor.limits and the 5 s save-response timeout; never hand-write
-  postMessage - use the vendored SDK. The upstream API ask that unblocks
-  the M3 tweaks milestone is tracked in docs/exo-editor-api-request.md.
+  workspace:read + workspace:write + events:subscribe, vendored
+  DRACO/KTX2/Meshopt decoders, npm-workspaces layout with an unmodified
+  vendored @exo/plugin-sdk.
+  Hard platform constraints: workspace reads are exact-path; discovery is
+  available only through the shell-owned user picker (plugin/request-files,
+  SDK 1.2.0+) and permissioned one-level directory listing
+  (plugin/request-list + workspace:list, SDK 1.3.0+); recursive listing,
+  globbing and search do not exist. A plugin writes only its own open
+  document. Design around editor.limits and the 5 s save-response timeout;
+  never hand-write postMessage - use the vendored SDK. The upstream API ask
+  that unblocked M3 is resolved; docs/exo-editor-api-request.md section 8
+  records the shipped shape. The vendored SDK is 1.1.0 and must be
+  refreshed to 1.3.0 for M3.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

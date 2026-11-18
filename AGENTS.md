@@ -41,8 +41,11 @@ The first iteration's technical decisions are settled and recorded in
 authoritative for stack, architecture, layout, tooling and hosting. The
 milestone plan lives in [`docs/roadmap.md`](docs/roadmap.md); work is
 managed as OpenSpec changes under `openspec/changes/`. The M3
-(reference-tweaks) milestone is blocked on an upstream exo-editor API ask
-tracked in [`docs/exo-editor-api-request.md`](docs/exo-editor-api-request.md).
+(reference-tweaks) milestone is no longer blocked: exo-editor shipped the
+requested workspace picker and permissioned directory listing on 2026-11-18
+(see [`docs/exo-editor-api-request.md`](docs/exo-editor-api-request.md)
+section 8). Choosing the M3 UX and its permission set remains part of that
+milestone's OpenSpec change, not a settled decision.
 
 For anything the register does not already cover, the rule stands: do not
 treat any technology, library, architecture, layout, tooling or hosting
