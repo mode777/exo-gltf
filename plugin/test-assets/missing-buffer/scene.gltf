@@ -1,0 +1,6 @@
+{
+  "asset": { "version": "2.0", "generator": "exo-gltf test fixture" },
+  "scene": 0,
+  "scenes": [{ "nodes": [] }],
+  "buffers": [{ "uri": "missing.bin", "byteLength": 12 }]
+}
