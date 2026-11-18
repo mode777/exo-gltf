@@ -37,9 +37,9 @@
 
 ## 7. Integration and deployment
 
-- [ ] 7.1 Run the skill's local dev checklist (step 6) against the deployed shell end to end and record the result in the change notes
+- [x] 7.1 Run the skill's local dev checklist (step 6) against the deployed shell end to end and record the result in the change notes
 - [x] 7.2 Add the GitHub Actions deploy workflow (skill step 7), push to `main`, enable Pages source "GitHub Actions", and verify the workflow is green
-- [ ] 7.3 Verify the deployed plugin: `curl -sI` on `https://mode777.github.io/exo-gltf/exo-manifest.json` returns 200 with JSON content type and CORS; then run the skill's deployed checklist (step 8) — consent shows no cross-origin storage warning, matching file mounts one handler, no bytes move before the plugin asks, save round-trips, external change visible, tab close disposes, disabling falls back to the shell surface
+- [x] 7.3 Verify the deployed plugin: `curl -sI` on `https://mode777.github.io/exo-gltf/exo-manifest.json` returns 200 with JSON content type and CORS; then run the skill's deployed checklist (step 8) — consent shows no cross-origin storage warning, matching file mounts one handler, no bytes move before the plugin asks, save round-trips, external change visible, tab close disposes, disabling falls back to the shell surface
 
 ## Workflow follow-up
 
