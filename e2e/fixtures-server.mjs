@@ -62,6 +62,9 @@ function send(response, status, body, type = 'text/plain; charset=utf-8') {
   response.writeHead(status, {
     'content-type': type,
     'access-control-allow-origin': '*',
+    // Chromium's Private Network Access: a public HTTPS page fetching
+    // http://localhost requires this opt-in from the local server.
+    'access-control-allow-private-network': 'true',
     'cache-control': 'no-store',
   })
   response.end(body)
@@ -76,6 +79,18 @@ function safeJoin(root, requestPath) {
 const server = createServer((request, response) => {
   const url = new URL(request.url ?? '/', `http://localhost:${port}`)
   const path = decodeURIComponent(url.pathname)
+
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204, {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, OPTIONS',
+      'access-control-allow-headers': '*',
+      'access-control-allow-private-network': 'true',
+      'access-control-max-age': '600',
+    })
+    response.end()
+    return
+  }
 
   if (path === '/health') return send(response, 200, 'ok')
 

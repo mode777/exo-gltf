@@ -251,9 +251,16 @@
   }
 
   window.showDirectoryPicker = async () => {
-    if (!state.rootHandle) {
-      state.rootHandle = await buildRoot()
+    try {
+      if (!state.rootHandle) {
+        state.rootHandle = await buildRoot()
+      }
+      return state.rootHandle
+    } catch (error) {
+      const message = String((error && error.message) || error)
+      window.__EXO_E2E__.lastError = message
+      console.error('EXO_E2E_PICKER_FAILED', message)
+      throw error
     }
-    return state.rootHandle
   }
 })()

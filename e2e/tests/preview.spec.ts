@@ -22,6 +22,7 @@ declare global {
       size(path: string): number
       touch(path: string): void
       remove(path: string): void
+      lastError?: string
     }
   }
 }
@@ -84,6 +85,14 @@ async function bootstrap(page: Page, fixturePaths: string[]): Promise<void> {
   }
   await page.addInitScript({ content: fakeFsaSource })
   await page.addInitScript({ content: `window.__EXO_E2E_CONFIG__ = ${JSON.stringify(config)};` })
+  page.on('console', (message) => {
+    if (message.text().includes('EXO_E2E')) console.log('[e2e console]', message.text())
+  })
+  page.on('requestfailed', (request) => {
+    if (request.url().includes('localhost')) {
+      console.log('[e2e requestfailed]', request.url(), request.failure()?.errorText)
+    }
+  })
   await gotoShell(page)
 
   await page.getByRole('button', { name: 'Open Folder…' }).click()
