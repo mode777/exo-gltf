@@ -4,6 +4,10 @@
   "type": "module",
   "workspaces": [
     "sdk",
-    "plugin"
-  ]
+    "plugin",
+    "e2e"
+  ],
+  "scripts": {
+    "e2e": "npm test --workspace e2e"
+  }
 }
