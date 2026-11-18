@@ -59,6 +59,22 @@ if (deployed) {
   test.beforeAll(waitForDeployedBuild)
 }
 
+async function gotoShell(page: Page): Promise<void> {
+  // The shell deploys independently and briefly serves GitHub's 404 while a
+  // deployment propagates; retry instead of failing the whole suite.
+  let lastStatus = 0
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const response = await page.goto('/', { waitUntil: 'domcontentloaded' }).catch(() => null)
+    lastStatus = response?.status() ?? 0
+    const missing = await page
+      .evaluate(() => document.body.textContent?.includes("There isn't a GitHub Pages site here") ?? true)
+      .catch(() => true)
+    if (!missing) return
+    await page.waitForTimeout(10_000)
+  }
+  throw new Error(`Exo shell did not become available (last navigation status ${lastStatus}).`)
+}
+
 async function bootstrap(page: Page, fixturePaths: string[]): Promise<void> {
   const config = {
     base: fixtureBase,
@@ -67,7 +83,7 @@ async function bootstrap(page: Page, fixturePaths: string[]): Promise<void> {
   }
   await page.addInitScript({ content: fakeFsaSource })
   await page.addInitScript({ content: `window.__EXO_E2E_CONFIG__ = ${JSON.stringify(config)};` })
-  await page.goto('/')
+  await gotoShell(page)
 
   await page.getByRole('button', { name: 'Open Folder…' }).click()
 
@@ -92,7 +108,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-async function openFixture(page: Page, path: string): Promise<FrameLocator> {
+async function openFile(page: Page, path: string): Promise<FrameLocator> {
   const segments = path.split('/')
   for (const directory of segments.slice(0, -1)) {
     const row = treeRow(page, directory)
@@ -100,7 +116,11 @@ async function openFixture(page: Page, path: string): Promise<FrameLocator> {
     await expect(row).toHaveAttribute('aria-expanded', 'true')
   }
   await treeRow(page, segments[segments.length - 1]).dblclick()
-  const frame = page.frameLocator(iframeSelector)
+  return page.frameLocator(iframeSelector)
+}
+
+async function openFixture(page: Page, path: string): Promise<FrameLocator> {
+  const frame = await openFile(page, path)
   await expect(frame.locator('.chrome-phase')).toHaveText('ready', { timeout: 60_000 })
   return frame
 }
@@ -189,18 +209,14 @@ test('missing texture renders a placeholder and a named warning', async ({ page 
 
 test('missing buffer blocks the scene with an explicit error', async ({ page }) => {
   await bootstrap(page, ['missing-buffer/scene.gltf'])
-  await openFixture(page, 'missing-buffer/scene.gltf').catch(() => undefined)
-  const frame = page.frameLocator(iframeSelector)
+  const frame = await openFile(page, 'missing-buffer/scene.gltf')
   await expect(frame.locator('.notice-error')).toContainText('missing.bin', { timeout: 60_000 })
   await expect(frame.locator('canvas')).toHaveCount(0)
 })
 
 test('oversized file shows the too-large state', async ({ page }) => {
   await bootstrap(page, ['large/oversized.glb'])
-  const segments = 'large/oversized.glb'.split('/')
-  await treeRow(page, segments[0]).dblclick()
-  await treeRow(page, segments[1]).dblclick()
-  const frame = page.frameLocator(iframeSelector)
+  const frame = await openFile(page, 'large/oversized.glb')
   await expect(frame.locator('.notice-error')).toContainText('exceeds the editor size limit', {
     timeout: 60_000,
   })
