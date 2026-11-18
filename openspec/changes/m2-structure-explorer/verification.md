@@ -46,5 +46,11 @@ is glibc-only.
 
 ## Deployment pipeline
 
-To be recorded after the GitHub Actions run on `main`: run URL and the
-deployed-suite result.
+GitHub Actions run on `main` (commit `38b4ebb`, workflow
+"Deploy plugin to GitHub Pages"):
+
+- URL: <https://github.com/mode777/exo-gltf/actions/runs/44368678031>
+- Jobs: **build**, **e2e-local**, **deploy**, **e2e-deployed** — all
+  succeeded.
+- The deployed suite ran the same 9 Playwright tests against
+  `https://mode777.github.io/exo-gltf/` (`EXO_EXPECT_DEPLOYED=1`).

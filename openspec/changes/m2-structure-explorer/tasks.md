@@ -35,7 +35,7 @@
 
 ## 7. Integration and verification
 
-- [ ] 7.1 Run the full pipeline (build → e2e-local → deploy → e2e-deployed) with the extended suite and record the run URL plus bundle-size delta in `openspec/changes/m2-structure-explorer/verification.md`
+- [x] 7.1 Run the full pipeline (build → e2e-local → deploy → e2e-deployed) with the extended suite and record the run URL plus bundle-size delta in `openspec/changes/m2-structure-explorer/verification.md`
 - [x] 7.2 Update `docs/decisions.md` (D-05) with the resolved `@gltf-transform` version and the measured bundle delta, and verify the register matches the lockfile and build output
 
 ## Workflow follow-up
