@@ -156,12 +156,14 @@ async function openFixture(page: Page, path: string): Promise<FrameLocator> {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     await openFile(page, path)
     const mounted = await frame
-      .locator('.chrome-phase')
+      .locator('.app[data-phase]')
       .waitFor({ state: 'attached', timeout: attempt === 0 ? 15_000 : 30_000 })
       .then(() => true)
       .catch(() => false)
     if (mounted) {
-      await expect(frame.locator('.chrome-phase')).toHaveText('ready', { timeout: 60_000 })
+      await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'ready', {
+        timeout: 60_000,
+      })
       return frame
     }
     await page.locator('.tab-close').first().click({ timeout: 5_000 }).catch(() => undefined)
@@ -275,7 +277,7 @@ test('external references, pass-through save, external change, delete and dispos
       { p: `/${documentPath}`, previous: readsBefore },
       { timeout: 20_000 },
     )
-    await expect(frame.locator('.chrome-phase')).toHaveText('ready')
+    await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'ready')
 
     // The new structure is shown, expansion reset, and the old selection gone.
     await expectGroupCount(frame, 'nodes', 3)

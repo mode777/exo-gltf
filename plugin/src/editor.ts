@@ -6,7 +6,6 @@ import {
   pushNotice,
   selection,
   setExplorer,
-  setFileName,
   setPhase,
   viewportHost,
 } from './app'
@@ -51,7 +50,6 @@ async function main(): Promise<void> {
 
   const initialTheme = connection.init.theme
   applyTheme(initialTheme)
-  setFileName(editor.file.name)
   mountApp(root)
 
   let path = editor.file.path
@@ -212,7 +210,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  // Boot failure: no app chrome exists yet, so surface actionable text.
+  // Boot failure: no app UI exists yet, so surface actionable text.
   document.body.textContent =
     error instanceof Error ? `glTF Viewer failed to start: ${error.message}` : String(error)
 })

@@ -1,5 +1,5 @@
 /**
- * Imperative three.js island. Preact owns the chrome around it; this module
+ * Imperative three.js island. Preact owns the UI around it; this module
  * owns the WebGL lifecycle, which must be created lazily (a notice-only
  * frame owns no GL context) and torn down completely on disposal.
  */

@@ -1,4 +1,4 @@
-/** Preact root. Owns the chrome around the imperative three.js island. */
+/** Preact root. Owns the UI around the imperative three.js island. */
 
 import { signal } from '@preact/signals'
 import { render } from 'preact'
@@ -9,11 +9,10 @@ export type UiPhase = 'loading' | 'ready' | 'error'
 
 export interface UiState {
   phase: UiPhase
-  fileName: string
   notices: Notice[]
 }
 
-export const ui = signal<UiState>({ phase: 'loading', fileName: '', notices: [] })
+export const ui = signal<UiState>({ phase: 'loading', notices: [] })
 
 /** Set by the stage ref; the editor creates the viewport inside it. */
 export const viewportHost = signal<HTMLElement | null>(null)
@@ -29,10 +28,6 @@ export const expandedGroups = signal<ReadonlySet<string>>(new Set())
 
 export function setPhase(phase: UiPhase): void {
   ui.value = { ...ui.value, phase }
-}
-
-export function setFileName(fileName: string): void {
-  ui.value = { ...ui.value, fileName }
 }
 
 export function pushNotice(notice: Notice): void {
@@ -64,13 +59,7 @@ export function mountApp(root: HTMLElement): void {
 function App() {
   const state = ui.value
   return (
-    <div class="app">
-      <header class="chrome">
-        <span class="chrome-title">{state.fileName || 'glTF Viewer'}</span>
-        <span class={`chrome-phase chrome-phase-${state.phase}`} aria-live="polite">
-          {state.phase}
-        </span>
-      </header>
+    <div class="app" data-phase={state.phase}>
       <div class="main">
         <div class="stage-wrap">
           <div
