@@ -1,0 +1,42 @@
+schema: spec-driven
+
+# Project context.
+# Agreed constraints for OpenSpec artifacts and workflows in this repo.
+context: |
+  exo-gltf is an Exo editor plugin (cross-origin, GitHub Pages project page
+  https://mode777.github.io/exo-gltf/) that opens, previews, explores and
+  lightly repairs glTF/GLB files. All agreed technical decisions live in
+  docs/decisions.md - consult it before proposing any stack, architecture,
+  layout, tooling or hosting choice. Locked in for the first iteration:
+  three.js (WebGL2) renders, @gltf-transform models structure and
+  serialization, Preact (React API) builds the editor UI, one manifest
+  editor entry for **/*.{gltf,glb} with rendering "frame", permissions
+  workspace:write + events:subscribe, vendored DRACO/KTX2/Meshopt decoders,
+  npm-workspaces layout with an unmodified vendored @exo/plugin-sdk.
+  Hard platform constraints: no workspace listing exists in the plugin
+  protocol; a plugin writes only its own open document; design around
+  editor.limits and the 5 s save-response timeout; never hand-write
+  postMessage - use the vendored SDK. The upstream API ask that unblocks
+  the M3 tweaks milestone is tracked in docs/exo-editor-api-request.md.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
