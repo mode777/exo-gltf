@@ -1,0 +1,9 @@
+{
+  "name": "exo-gltf",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "sdk",
+    "plugin"
+  ]
+}

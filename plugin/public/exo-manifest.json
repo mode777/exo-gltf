@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.mode777.gltf",
+  "name": "glTF Viewer",
+  "version": "0.1.0",
+  "description": "Opens glTF and GLB files in the Exo shell with a 3D preview, a structure explorer and small repairs such as resolving missing references.",
+  "publisher": {
+    "name": "Alex Klingenbeck"
+  },
+  "license": "MIT",
+  "engines": {
+    "exo": ">=0.1.0"
+  },
+  "runtime": {
+    "entry": "plugin.html"
+  },
+  "permissions": ["workspace:write", "events:subscribe"],
+  "contributes": {
+    "fileEditors": [
+      {
+        "glob": "**/*.{gltf,glb}",
+        "entry": "editor.html",
+        "label": "glTF",
+        "priority": 0,
+        "rendering": "frame"
+      }
+    ]
+  }
+}
