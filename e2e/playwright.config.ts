@@ -20,6 +20,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     launchOptions: {
+      // Allows CI or the verification server to reuse a preinstalled Chromium.
+      ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH
+        ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH }
+        : {}),
       args: ['--enable-unsafe-swiftshader', '--disable-dev-shm-usage'],
     },
   },

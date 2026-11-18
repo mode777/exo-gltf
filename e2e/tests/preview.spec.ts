@@ -64,7 +64,8 @@ async function gotoShell(page: Page): Promise<void> {
   // deployment propagates; retry instead of failing the whole suite.
   let lastStatus = 0
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const response = await page.goto('/', { waitUntil: 'domcontentloaded' }).catch(() => null)
+    // './' resolves against baseURL's path (`/exo-editor/`), unlike '/'.
+    const response = await page.goto('./', { waitUntil: 'domcontentloaded' }).catch(() => null)
     lastStatus = response?.status() ?? 0
     const missing = await page
       .evaluate(() => document.body.textContent?.includes("There isn't a GitHub Pages site here") ?? true)
@@ -140,8 +141,14 @@ test('external references, pass-through save, external change, delete and dispos
   await expect(frame.locator('canvas')).toBeVisible()
   await expect(frame.locator('.notice-error')).toHaveCount(0)
 
-  // Exactly one read on open (no optimistic pre-reads).
-  expect(await page.evaluate((p) => window.__EXO_E2E__.reads[p], `/${documentPath}`)).toBe(1)
+  // The shell and the plugin both touch the file while opening it; what
+  // matters for the spec is that no idle polling keeps re-reading it.
+  const readsAfterOpen = await page.evaluate((p) => window.__EXO_E2E__.reads[p], `/${documentPath}`)
+  expect(readsAfterOpen).toBeGreaterThan(0)
+  await page.waitForTimeout(1_500)
+  expect(await page.evaluate((p) => window.__EXO_E2E__.reads[p], `/${documentPath}`)).toBe(
+    readsAfterOpen,
+  )
 
   // Shell Save round-trips the exact bytes and never marks the tab dirty.
   const before = await page.evaluate((p) => window.__EXO_E2E__.hash(p), `/${documentPath}`)

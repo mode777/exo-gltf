@@ -14,7 +14,7 @@
   "runtime": {
     "entry": "plugin.html"
   },
-  "permissions": ["workspace:write", "events:subscribe"],
+  "permissions": ["workspace:read", "workspace:write", "events:subscribe"],
   "contributes": {
     "fileEditors": [
       {

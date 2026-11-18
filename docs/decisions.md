@@ -43,10 +43,13 @@ informed by two milestones of read-path experience.
 
 ### D-02 Manifest permissions — `workspace:write` + `events:subscribe`
 
-**Decision.** v1 declares `workspace:write` (implies `workspace:read`,
-covers M3 saving) and `events:subscribe` (theme-follow via `theme/changed`;
-`config/changed` if settings are contributed later). One stable consent
-surface for the whole iteration.
+**Decision.** v1 declares `workspace:read`, `workspace:write` and
+`events:subscribe`. The shell's semantic validator requires `workspace:read`
+to be listed explicitly whenever `workspace:write` is present (a write
+permission does not waive the read declaration), even though the capability
+itself is implied. `events:subscribe` enables theme-follow via
+`theme/changed` (`config/changed` if settings are contributed later). One
+stable consent surface for the whole iteration.
 
 **Rationale.** C7: any later widening re-prompts every user, so the set is
 chosen once for everything the iteration needs.

@@ -41,7 +41,11 @@ describe('manifest', () => {
     expect(manifest.license).toBe('MIT')
     expect(manifest.publisher.name).toBe('Alex Klingenbeck')
     expect(manifest.engines.exo).toBe('>=0.1.0')
-    expect(manifest.permissions.sort()).toEqual(['events:subscribe', 'workspace:write'])
+    expect(manifest.permissions.sort()).toEqual([
+      'events:subscribe',
+      'workspace:read',
+      'workspace:write',
+    ])
   })
 
   it('declares exactly one visible-frame editor for glTF and GLB', () => {
