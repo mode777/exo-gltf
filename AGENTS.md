@@ -23,6 +23,17 @@ More powerful editing features, such as UV editing. They are a possible
 direction once the first iteration above is solid, but they are explicitly
 not part of the initial scope. Do not build towards them yet.
 
+## Skill: create-exo-plugin
+
+This repository vendors the `create-exo-plugin` skill at
+[`.agents/skills/create-exo-plugin/SKILL.md`](.agents/skills/create-exo-plugin/SKILL.md),
+copied verbatim from
+[mode777/exo-editor](https://github.com/mode777/exo-editor/blob/main/.agents/skills/create-exo-plugin/SKILL.md).
+
+Use this skill whenever the plugin is scaffolded, built, tested or deployed:
+it encodes the Exo plugin contracts and workflow. Keep the vendored copy
+unmodified so it can be diffed and refreshed against upstream.
+
 ## Status
 
 This repository is at the very beginning. The intentions above are settled;
