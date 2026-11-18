@@ -36,8 +36,15 @@ unmodified so it can be diffed and refreshed against upstream.
 
 ## Status
 
-This repository is at the very beginning. The intentions above are settled;
-the technical decisions needed to realize them are not. Do not treat any
-technology, library, architecture, layout, tooling or hosting choice as
-decided unless it has been agreed with the user and recorded in this
-repository first.
+The first iteration's technical decisions are settled and recorded in
+[`docs/decisions.md`](docs/decisions.md) — treat that register as
+authoritative for stack, architecture, layout, tooling and hosting. The
+milestone plan lives in [`docs/roadmap.md`](docs/roadmap.md); work is
+managed as OpenSpec changes under `openspec/changes/`. The M3
+(reference-tweaks) milestone is blocked on an upstream exo-editor API ask
+tracked in [`docs/exo-editor-api-request.md`](docs/exo-editor-api-request.md).
+
+For anything the register does not already cover, the rule stands: do not
+treat any technology, library, architecture, layout, tooling or hosting
+choice as decided unless it has been agreed with the user and recorded in
+this repository first.

@@ -62,7 +62,8 @@ hosting the Pages site). Display name "glTF Viewer". Publisher
 **Rationale.** Id must be stable forever (consent and settings key on it);
 the GitHub-owner form needs no personal domain.
 
-**Status.** Agreed. License is still open (MIT suggested) — see Open items.
+**Status.** Agreed. Id, name, publisher and version as above; plugin code
+is MIT-licensed.
 
 ### D-04 3D engine — three.js (WebGL2)
 
@@ -109,8 +110,10 @@ does not need it.
 **Rationale.** Owner chose the React family; Preact is the leanest member
 and fits a Pages-hosted plugin budget.
 
-**Status.** Family agreed (owner). Preact as the specific pick is a
-recommended default — confirm or switch to React at scaffold time.
+**Status.** Agreed — Preact. Owner chose the React family and delegated
+the specific pick; the lightweight option fits because three.js dominates
+the surface and no React-only dependency (e.g. react-three-fiber) is
+planned — the three.js integration stays imperative.
 
 ### D-08 Missing-reference UX — deferred; blocked on upstream exo-editor API
 
@@ -182,14 +185,16 @@ claims the same glob.
 
 ## Open items
 
-- **License** for the plugin manifest/repo (suggestion: MIT).
-- **Preact vs React proper** — confirm at scaffold time (D-07).
 - **`contributes.configuration`** (workspace settings such as lighting or
   grid defaults) — deferred; would use the already-granted `config/changed`
   channel, no new permission needed.
-- **M3 unblocked**: outcome of `docs/exo-editor-api-request.md`.
+- **M3 unblocked**: outcome of `docs/exo-editor-api-request.md`. Owner
+  confirmed the blocker is acceptable for now; M1/M2 proceed independently.
 
 ## Change log
 
-- 2026-11-18 Initial register created from the first-iteration discovery
-  session (OpenSpec explore mode); OpenSpec initialized the same day.
+- 2026-11-18 (2) Owner closed the open defaults: license is MIT; UI stack
+  is Preact (lightweight pick delegated). M3 blocker accepted as-is.
+- 2026-11-18 (1) Initial register created from the first-iteration
+  discovery session (OpenSpec explore mode); OpenSpec initialized the same
+  day.
