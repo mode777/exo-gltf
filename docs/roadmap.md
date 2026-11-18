@@ -8,11 +8,15 @@ next begins. Work on a milestone is managed as an OpenSpec change under
 
 ```text
 M1 open + preview   ->   M2 structure explorer   ->   M3 reference tweaks
-      (proposed)                 (planned)              (blocked upstream)
+ (archived 2026-11-18)        (planned)              (blocked upstream)
                                                         docs/exo-editor-api-request.md
 ```
 
 ## M1 — Open + 3D preview
+
+**Status.** Delivered, verified (see
+`openspec/changes/archive/2026-11-18-m1-open-preview/verification.md`) and
+archived on 2026-11-18.
 
 **Goal.** Opening any `.gltf` or `.glb` in an Exo workspace mounts the
 plugin's visible frame and shows an interactive 3D preview of the asset.
