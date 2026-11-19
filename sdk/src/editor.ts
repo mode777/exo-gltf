@@ -14,6 +14,9 @@ import {
   type FileChangedPayload,
   type FileContent,
   type FileMetadata,
+  type FilePickerOptions,
+  type DirectoryPage,
+  type ListDirectoryOptions,
   type SaveContent,
   type SaveResult,
   type SettingValues,
@@ -81,6 +84,47 @@ function parseSaveResult(payload: unknown): SaveResult | null {
   }
 }
 
+function parseFileSelection(payload: unknown): string[] | null {
+  if (!isPlainObject(payload) || !Array.isArray(payload.paths)) return null
+  if (payload.paths.some((path) => typeof path !== 'string')) return null
+  return payload.paths as string[]
+}
+
+function parseDirectoryPage(payload: unknown): DirectoryPage | null {
+  if (!isPlainObject(payload) || !Array.isArray(payload.entries)) return null
+  if (
+    payload.nextCursor !== undefined &&
+    (typeof payload.nextCursor !== 'string' || payload.nextCursor.length === 0)
+  ) {
+    return null
+  }
+  const entries: DirectoryPage['entries'] = []
+  for (const item of payload.entries) {
+    if (!isPlainObject(item) || typeof item.path !== 'string' || item.path.length === 0) {
+      return null
+    }
+    const keys = Object.keys(item)
+    if (item.kind === 'file') {
+      if (keys.some((key) => key !== 'path' && key !== 'kind' && key !== 'size')) return null
+      if (typeof item.size !== 'number' || !Number.isFinite(item.size) || item.size < 0) {
+        return null
+      }
+      entries.push({ path: item.path, kind: 'file', size: item.size })
+      continue
+    }
+    if (item.kind === 'directory') {
+      if (keys.some((key) => key !== 'path' && key !== 'kind')) return null
+      entries.push({ path: item.path, kind: 'directory' })
+      continue
+    }
+    return null
+  }
+  return {
+    entries,
+    ...(payload.nextCursor === undefined ? {} : { nextCursor: payload.nextCursor }),
+  }
+}
+
 function parseFileChanged(payload: unknown): FileChangedPayload | null {
   if (!isPlainObject(payload)) return null
   if (typeof payload.path !== 'string') return null
@@ -118,6 +162,7 @@ export class EditorClient {
   private readonly saveHandlers: SaveHandler[] = []
   private metadata: FileMetadata
   private liveSaveId: string | null = null
+  private pendingPickerId: string | null = null
   private nextRequestId = 0
   private isClosed = false
   private disposed = false
@@ -135,6 +180,12 @@ export class EditorClient {
 
     gate.on('shell/file-content', (envelope) =>
       this.handleContent(envelope.replyTo, envelope.payload),
+    )
+    gate.on('shell/files-selected', (envelope) =>
+      this.handleFileSelection(envelope.replyTo, envelope.payload),
+    )
+    gate.on('shell/list-result', (envelope) =>
+      this.handleListing(envelope.replyTo, envelope.payload),
     )
     gate.on('shell/error', (envelope) => this.handleError(envelope.replyTo, envelope.payload))
     gate.on('shell/request-save', (envelope) => {
@@ -182,9 +233,75 @@ export class EditorClient {
     return this.request<FileContent>(id, 'plugin/request-file', { path, encoding })
   }
 
+  /**
+   * Ask the shell to open its workspace file picker. Resolves with the selected
+   * `/`-rooted paths, or `[]` when the user cancels. The shell returns no
+   * content; read a selected path with `readFile`.
+   */
+  requestFiles(options: FilePickerOptions = {}): Promise<string[]> {
+    if (!this.init.capabilities.filePicker) {
+      return Promise.reject(
+        new ExoProtocolError(
+          'unsupported-message',
+          'This shell does not support the workspace file picker.',
+        ),
+      )
+    }
+    if (!this.init.capabilities.requestFiles) {
+      return Promise.reject(
+        new ExoProtocolError(
+          'permission-denied',
+          'The plugin does not have workspace read permission for the picker.',
+        ),
+      )
+    }
+    if (this.pendingPickerId !== null) {
+      return Promise.reject(
+        new ExoProtocolError('rate-limited', 'A file picker request is already pending.'),
+      )
+    }
+    const id = this.nextId()
+    this.pendingPickerId = id
+    return this.request<string[]>(id, 'plugin/request-files', {
+      multiple: options.multiple === true,
+      ...(options.directory === undefined ? {} : { directory: options.directory }),
+    }).finally(() => {
+      if (this.pendingPickerId === id) this.pendingPickerId = null
+    })
+  }
+
   setDirty(dirty: boolean): void {
     if (this.isClosed) return
     this.gate.send('plugin/dirty', { dirty })
+  }
+
+  /**
+   * List one workspace directory level. Resolves with a page of minimal entries
+   * and, when more remain, the opaque `nextCursor` to pass to the next call.
+   * The shell returns no content; read a listed file with `readFile`.
+   */
+  listDirectory(path: string, options: ListDirectoryOptions = {}): Promise<DirectoryPage> {
+    if (!this.init.capabilities.directoryListing) {
+      return Promise.reject(
+        new ExoProtocolError(
+          'unsupported-message',
+          'This shell does not support directory listing.',
+        ),
+      )
+    }
+    if (!this.init.permissions.includes('workspace:list')) {
+      return Promise.reject(
+        new ExoProtocolError(
+          'permission-denied',
+          'The plugin does not have workspace:list permission.',
+        ),
+      )
+    }
+    const id = this.nextId()
+    return this.request<DirectoryPage>(id, 'plugin/request-list', {
+      path,
+      ...(options.cursor === undefined ? {} : { cursor: options.cursor }),
+    })
   }
 
   /**
@@ -326,6 +443,30 @@ export class EditorClient {
       return
     }
     this.settle(replyTo, undefined, content)
+  }
+
+  private handleFileSelection(replyTo: string | undefined, payload: unknown): void {
+    const paths = parseFileSelection(payload)
+    if (!paths) {
+      this.settle(
+        replyTo,
+        new ExoProtocolError('protocol-violation', 'The shell sent an invalid file selection.'),
+      )
+      return
+    }
+    this.settle(replyTo, undefined, paths)
+  }
+
+  private handleListing(replyTo: string | undefined, payload: unknown): void {
+    const page = parseDirectoryPage(payload)
+    if (!page) {
+      this.settle(
+        replyTo,
+        new ExoProtocolError('protocol-violation', 'The shell sent an invalid directory page.'),
+      )
+      return
+    }
+    this.settle(replyTo, undefined, page)
   }
 
   private handleError(replyTo: string | undefined, payload: unknown): void {

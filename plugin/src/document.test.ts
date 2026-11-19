@@ -117,6 +117,67 @@ describe('parseDocument', () => {
     expect(Array.from(array)).toEqual([0])
   })
 
+  it('replaces a missing buffer with override bytes for a relink trial', async () => {
+    const synthetic = new TextEncoder().encode(
+      JSON.stringify({
+        asset: { version: '2.0' },
+        buffers: [{ uri: 'missing.bin', byteLength: 12 }],
+        bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+        accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: 'SCALAR' }],
+      }),
+    )
+    const prefetch: PrefetchResult = {
+      urls: new Map(),
+      raw: new Map(),
+      probes: [{ uri: 'missing.bin', kind: 'buffer', path: '/models/missing.bin', ok: false, code: 'not-found' }],
+      missingBuffers: [
+        { uri: 'missing.bin', kind: 'buffer', path: '/models/missing.bin', ok: false, code: 'not-found' },
+      ],
+    }
+    const replacement = new Float32Array([1, 2, 3])
+    const parsed = await parseDocument(synthetic, prefetch, {
+      overrides: new Map([
+        ['missing.bin', new Uint8Array(replacement.buffer.slice(0)) as Uint8Array<ArrayBuffer>],
+      ]),
+    })
+
+    expect(parsed.error).toBeNull()
+    const array = parsed.document!.getRoot().listAccessors()[0].getArray() as Float32Array
+    expect(Array.from(array)).toEqual([1, 2, 3])
+  })
+
+  it('replaces a missing image with override bytes', async () => {
+    const { bytes, prefetch } = await prefetchFixture('box-missing-texture', 'BoxTextured.gltf')
+    const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+    const parsed = await parseDocument(bytes, prefetch, {
+      overrides: new Map([['missing.png', image]]),
+    })
+
+    expect(parsed.error).toBeNull()
+    expect(Array.from(parsed.document!.getRoot().listTextures()[0].getImage() ?? [])).toEqual(
+      Array.from(image),
+    )
+  })
+
+  it('rejects an override that cannot satisfy the declared buffer layout', async () => {
+    const synthetic = new TextEncoder().encode(
+      JSON.stringify({
+        asset: { version: '2.0' },
+        buffers: [{ uri: 'missing.bin', byteLength: 12 }],
+        bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+        accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: 'SCALAR' }],
+      }),
+    )
+    const parsed = await parseDocument(
+      synthetic,
+      { urls: new Map(), raw: new Map(), probes: [], missingBuffers: [] },
+      { overrides: new Map([['missing.bin', new Uint8Array(2)]]) },
+    )
+
+    expect(parsed.document).toBeNull()
+    expect(parsed.error).toBeTruthy()
+  })
+
   it('reports invalid input instead of throwing', async () => {
     const { document, error } = await parseDocument(new TextEncoder().encode('not a gltf document'), {
       urls: new Map(),
@@ -127,5 +188,26 @@ describe('parseDocument', () => {
 
     expect(document).toBeNull()
     expect(error).toContain('not valid JSON')
+  })
+
+  it('registers dependency-free extensions so KTX2 documents stay editable', async () => {
+    const { bytes, prefetch } = await prefetchFixture('chronograph-watch', 'ChronographWatch.gltf')
+    const parsed = await parseDocument(bytes, prefetch)
+
+    expect(parsed.error).toBeNull()
+    expect(parsed.unsupportedExtensions).toEqual([])
+    expect(
+      parsed.document!.getRoot().listExtensionsUsed().map((extension) => extension.extensionName),
+    ).toContain('KHR_texture_basisu')
+  })
+
+  it('marks decoder-backed Draco documents read-only without losing the structure', async () => {
+    const { bytes, prefetch } = await prefetchFixture('box-draco', 'Box.gltf')
+    const parsed = await parseDocument(bytes, prefetch)
+
+    expect(parsed.unsupportedExtensions).toEqual(['KHR_draco_mesh_compression'])
+    expect(parsed.error).toBeNull()
+    expect(parsed.document).not.toBeNull()
+    expect(parsed.document!.getRoot().listMeshes()).toHaveLength(1)
   })
 })

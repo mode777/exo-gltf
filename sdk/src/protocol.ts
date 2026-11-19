@@ -5,7 +5,7 @@
  */
 
 export const PROTOCOL_VERSION = '1'
-export const SDK_VERSION = '1.1.0'
+export const SDK_VERSION = '1.3.0'
 
 export const READY_TIMEOUT_MS = 10_000
 export const REGISTRATION_TIMEOUT_MS = 10_000
@@ -14,7 +14,8 @@ export const MAX_ID_LENGTH = 64
 
 export type PluginMode = 'register' | 'editor'
 export type ThemeName = 'dark' | 'light' | 'high-contrast'
-export type PluginPermission = 'workspace:read' | 'workspace:write' | 'events:subscribe'
+export type PluginPermission =
+  'workspace:read' | 'workspace:write' | 'workspace:list' | 'events:subscribe'
 
 export interface Envelope<T = unknown> {
   exo: 1
@@ -33,6 +34,7 @@ export type ShellErrorCode =
   | 'permission-denied'
   | 'not-found'
   | 'not-a-file'
+  | 'not-a-directory'
   | 'too-large'
   | 'conflict'
   | 'rate-limited'
@@ -86,6 +88,34 @@ export interface EditorCapabilities {
   read: boolean
   write: boolean
   requestFiles: boolean
+  /** Shell support bit for `plugin/request-files`; false on older shells. */
+  filePicker: boolean
+  /** Shell support bit for `plugin/request-list`; false on older shells. */
+  directoryListing: boolean
+}
+
+export interface FilePickerOptions {
+  multiple?: boolean
+  /** Optional workspace-relative or `/`-rooted start hint. */
+  directory?: string
+}
+
+export interface DirectoryEntry {
+  path: string
+  kind: 'file' | 'directory'
+  /** Present for files only. */
+  size?: number
+}
+
+export interface DirectoryPage {
+  entries: DirectoryEntry[]
+  /** Opaque token for the next page; absent on the last page. */
+  nextCursor?: string
+}
+
+export interface ListDirectoryOptions {
+  /** The previous page's `nextCursor`; pass it unchanged. */
+  cursor?: string
 }
 
 export interface EditorLimits {

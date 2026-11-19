@@ -219,7 +219,11 @@
     const config = window.__EXO_E2E_CONFIG__ || { base: '', name: 'e2e-workspace', paths: [] }
     const root = makeNode('directory', config.name || 'e2e-workspace', null)
     for (const path of config.paths) {
-      const response = await fetch(config.base + '/files/' + path, { cache: 'no-store' })
+      const encoded = path
+        .split('/')
+        .map((segment) => encodeURIComponent(segment))
+        .join('/')
+      const response = await fetch(config.base + '/files/' + encoded, { cache: 'no-store' })
       if (!response.ok) throw new Error('fixture fetch failed: ' + path + ' (' + response.status + ')')
       seed(root, path, new Uint8Array(await response.arrayBuffer()))
     }
@@ -249,6 +253,9 @@
       const node = findNode(path)
       node.content = typeof content === 'string' ? encoder.encode(content) : new Uint8Array(content)
       node.lastModified += 1000
+    },
+    text(path) {
+      return decoder.decode(findNode(path).content)
     },
     remove(path) {
       const node = findNode(path)

@@ -10,7 +10,8 @@
  */
 
 import { Document, PlatformIO } from '@gltf-transform/core'
-import { readDocumentJson } from './glb'
+import { SUPPORTED_EXTENSION_CLASSES, findUnsupportedExtensions } from './extensions'
+import { readDocumentJson, rewriteGlbJson } from './glb'
 import type { PrefetchResult } from './resources'
 
 /** Pseudo-URI for the opened document itself; never collides with glTF URIs. */
@@ -20,6 +21,8 @@ export interface ParsedDocument {
   /** Null when parsing failed; the preview and notices are unaffected. */
   document: Document | null
   error: string | null
+  /** Declared extensions the plugin cannot round-trip; makes the document read-only. */
+  unsupportedExtensions: string[]
 }
 
 function safeDecode(uri: string): string {
@@ -32,6 +35,33 @@ function safeDecode(uri: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * A document declaring a required extension without a registered handler
+ * cannot be read by the library. Strip only those names from the read-only
+ * copy so the structure stays browsable; preview and save keep the original
+ * bytes and the document is marked non-editable.
+ */
+function readableDocumentBytes(
+  view: ArrayBuffer,
+  json: Record<string, unknown>,
+  container: 'glb' | 'gltf',
+  unsupportedExtensions: string[],
+): Uint8Array {
+  const required = Array.isArray(json.extensionsRequired) ? json.extensionsRequired : []
+  const blocked = required.filter(
+    (name): name is string => typeof name === 'string' && unsupportedExtensions.includes(name),
+  )
+  if (blocked.length === 0) return new Uint8Array(view)
+
+  const sanitized = {
+    ...json,
+    extensionsRequired: required.filter((name) => !blocked.includes(name as string)),
+  }
+  return container === 'glb'
+    ? new Uint8Array(rewriteGlbJson(view, sanitized))
+    : new TextEncoder().encode(JSON.stringify(sanitized))
 }
 
 /** Declared buffer sizes by uri, used to zero-fill unreadable buffers. */
@@ -51,6 +81,8 @@ interface WorkspaceReaderOptions {
   documentBytes: Uint8Array<ArrayBuffer>
   raw: Map<string, Uint8Array<ArrayBuffer>>
   bufferLengths: Map<string, number>
+  /** Replacement bytes for a URI, used while trialing/applying a relink. */
+  overrides?: ReadonlyMap<string, Uint8Array<ArrayBuffer>>
 }
 
 /**
@@ -60,6 +92,9 @@ interface WorkspaceReaderOptions {
 class WorkspaceIO extends PlatformIO {
   constructor(private readonly options: WorkspaceReaderOptions) {
     super()
+    // Registering extensions keeps their payloads when the document is
+    // re-serialized; unsupported ones never reach this IO (read-only guard).
+    this.registerExtensions(SUPPORTED_EXTENSION_CLASSES)
   }
 
   protected async readURI(uri: string, type: 'view'): Promise<Uint8Array<ArrayBuffer>>
@@ -81,6 +116,8 @@ class WorkspaceIO extends PlatformIO {
 
   private lookup(uri: string): Uint8Array<ArrayBuffer> {
     if (uri === DOCUMENT_URI) return this.options.documentBytes
+    const override = this.options.overrides?.get(uri)
+    if (override) return override
     const candidates = uri === safeDecode(uri) ? [uri] : [uri, safeDecode(uri)]
     for (const candidate of candidates) {
       const raw = this.options.raw.get(candidate)
@@ -95,6 +132,11 @@ class WorkspaceIO extends PlatformIO {
   }
 }
 
+export interface ParseDocumentOptions {
+  /** Replacement bytes keyed by the document's original URI. */
+  overrides?: ReadonlyMap<string, Uint8Array<ArrayBuffer>>
+}
+
 /**
  * Parses the opened document with a workspace-backed IO adapter. Never throws:
  * the caller keeps M1's preview behavior and shows a structure notice instead.
@@ -102,21 +144,25 @@ class WorkspaceIO extends PlatformIO {
 export async function parseDocument(
   bytes: Uint8Array,
   prefetch: PrefetchResult,
+  options: ParseDocumentOptions = {},
 ): Promise<ParsedDocument> {
+  let unsupportedExtensions: string[] = []
   try {
     const view =
       bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
         ? (bytes.buffer as ArrayBuffer)
         : (bytes.slice().buffer as ArrayBuffer)
-    const { json } = readDocumentJson(view)
+    const { json, container } = readDocumentJson(view)
+    unsupportedExtensions = findUnsupportedExtensions(json)
     const io = new WorkspaceIO({
-      documentBytes: bytes as Uint8Array<ArrayBuffer>,
+      documentBytes: readableDocumentBytes(view, json, container, unsupportedExtensions) as Uint8Array<ArrayBuffer>,
       raw: prefetch.raw,
       bufferLengths: collectBufferLengths(json),
+      ...(options.overrides ? { overrides: options.overrides } : {}),
     })
     const document = await io.read(DOCUMENT_URI)
-    return { document, error: null }
+    return { document, error: null, unsupportedExtensions }
   } catch (error) {
-    return { document: null, error: errorMessage(error) }
+    return { document: null, error: errorMessage(error), unsupportedExtensions }
   }
 }

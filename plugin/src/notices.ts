@@ -4,6 +4,11 @@ import type { ProbeResult } from './resources'
 
 export type NoticeLevel = 'info' | 'warning' | 'error'
 
+export interface NoticeAction {
+  id: 'reload'
+  label: string
+}
+
 export interface Notice {
   /** Stable identity so repeated observations dedupe instead of stacking. */
   id: string
@@ -12,6 +17,7 @@ export interface Notice {
   title: string
   detail?: string
   path?: string
+  action?: NoticeAction
 }
 
 const MAX_NAMES_IN_DETAIL = 5
@@ -130,4 +136,53 @@ export function appendNotice(notices: Notice[], notice: Notice): Notice[] {
 
 export function removeNotice(notices: Notice[], id: string): Notice[] {
   return notices.filter((notice) => notice.id !== id)
+}
+
+/** A document that declares an extension the plugin cannot round-trip. */
+export function noticeForUnsupportedExtensions(names: string[]): Notice {
+  const list = names.join(', ')
+  return {
+    id: 'unsupported-extensions',
+    level: 'warning',
+    title: 'This document uses extensions that cannot be edited',
+    detail: `${list} ${names.length === 1 ? 'is' : 'are'} not supported for saving. The preview and structure stay available, and saving returns the original file.`,
+  }
+}
+
+/** The open file changed while reference edits are unsaved. */
+export function noticeForExternalChangeWhileDirty(): Notice {
+  return {
+    id: 'external-change-dirty',
+    level: 'warning',
+    title: 'The file changed on disk',
+    detail: 'Your unsaved reference repairs are kept. Reloading would discard them.',
+    action: { id: 'reload', label: 'Reload from disk (discard edits)' },
+  }
+}
+
+/** A picked or typed replacement could not be read or parsed. */
+export function noticeForRelinkFailure(
+  uri: string,
+  path: string,
+  code: string,
+  detail?: string,
+): Notice {
+  return {
+    id: `relink-failed:${uri}`,
+    level: 'error',
+    code,
+    title: `Could not relink ${baseName(uri)}`,
+    detail: `${detail ?? `The shell reported ${code}.`}${path ? ` Selected path: ${path}.` : ''} The reference is unchanged.`,
+    path,
+  }
+}
+
+/** The edited document could not be prepared for saving. */
+export function noticeForSerializationFailure(detail: string): Notice {
+  return {
+    id: 'serialization-failed',
+    level: 'error',
+    title: 'The repaired document could not be saved',
+    detail,
+  }
 }

@@ -4,6 +4,7 @@ import {
   collectExternalReferences,
   normalizeWorkspacePath,
   prefetchReferences,
+  referenceUri,
   resolveReferencePath,
   revokeResourceUrls,
   type ExternalReference,
@@ -59,6 +60,34 @@ describe('resolveReferencePath', () => {
     expect(resolveReferencePath('/models', 'https://example.com/x.png')).toBeNull()
     expect(resolveReferencePath('/models', 'file:///etc/passwd')).toBeNull()
     expect(resolveReferencePath('/models', '../../x.bin')).toBeNull()
+  })
+})
+
+describe('referenceUri', () => {
+  it('writes a plain name for a sibling file', () => {
+    expect(referenceUri('/models', '/models/scene.bin')).toBe('scene.bin')
+  })
+
+  it('writes forward-slash relative paths for subdirectories', () => {
+    expect(referenceUri('/models', '/models/tex/albedo.png')).toBe('tex/albedo.png')
+    expect(referenceUri('/', '/tex/albedo.png')).toBe('tex/albedo.png')
+  })
+
+  it('writes workspace-root paths for files outside the document directory', () => {
+    expect(referenceUri('/models/deep', '/shared/x.bin')).toBe('/shared/x.bin')
+    expect(referenceUri('/models', '/other/tex.png')).toBe('/other/tex.png')
+  })
+
+  it('percent-encodes URI-special characters and round-trips through resolveReferencePath', () => {
+    const uri = referenceUri('/models', '/models/tex/Box #1 100%.png')
+    expect(uri).toBe('tex/Box%20%231%20100%25.png')
+    expect(resolveReferencePath('/models', uri!)).toBe('/models/tex/Box #1 100%.png')
+  })
+
+  it('rejects invalid or identical paths', () => {
+    expect(referenceUri('/models', '/')).toBeNull()
+    expect(referenceUri('/models', '/../x.bin')).toBeNull()
+    expect(referenceUri('/models', '/models')).toBeNull()
   })
 })
 

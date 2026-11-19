@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -48,5 +48,19 @@ describe('curated fixtures', () => {
     const { json } = readDocumentJson(asset('missing-buffer/scene.gltf'))
     const references = collectExternalReferences(json)
     expect(references).toEqual([{ uri: 'missing.bin', kind: 'buffer', index: 0 }])
+  })
+
+  it('the relink fixture has both references missing and replacement candidates present', () => {
+    const { json } = readDocumentJson(asset('relink/BoxTextured.gltf'))
+    const references = collectExternalReferences(json)
+    expect(references).toEqual([
+      { uri: 'missing.bin', kind: 'buffer', index: 0 },
+      { uri: 'missing.png', kind: 'image', index: 0 },
+    ])
+    expect(existsSync(join(root, 'test-assets', 'relink', 'missing.bin'))).toBe(false)
+    expect(existsSync(join(root, 'test-assets', 'relink', 'missing.png'))).toBe(false)
+    expect(existsSync(join(root, 'test-assets', 'relink', 'assets', 'BoxTextured0.bin'))).toBe(true)
+    expect(existsSync(join(root, 'test-assets', 'relink', 'assets', 'CesiumLogoFlat.png'))).toBe(true)
+    expect(existsSync(join(root, 'test-assets', 'relink', 'assets', 'Box #1.png'))).toBe(true)
   })
 })

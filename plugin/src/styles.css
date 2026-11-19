@@ -96,12 +96,138 @@ body {
   min-height: 0;
 }
 
+.repairs {
+  flex: 0 1 auto;
+  max-height: 32%;
+  padding: 8px 10px;
+  overflow: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.repairs h2 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.repair-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.repair-row {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.repair-row-missing {
+  border-left-color: var(--error);
+}
+
+.repair-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.repair-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repair-kind {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.repair-uri {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.repair-actions,
+.inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.repair-actions button,
+.repair-manual button,
+.inspector-actions button,
+.notice-action {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.repair-actions button:hover,
+.repair-manual button:hover,
+.inspector-actions button:hover,
+.notice-action:hover {
+  border-color: var(--accent);
+}
+
+.repair-actions button:disabled,
+.repair-manual button:disabled,
+.inspector-actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.repair-manual {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.repair-manual input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.repair-busy {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.notice-action {
+  margin-top: 6px;
+}
+
 .explorer {
-  flex: 1 1 55%;
+  flex: 1 1 40%;
 }
 
 .inspector {
-  flex: 0 0 40%;
+  flex: 0 0 38%;
   border-top: 1px solid var(--border);
 }
 

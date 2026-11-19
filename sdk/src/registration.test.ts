@@ -98,7 +98,13 @@ describe('registration client', () => {
         mtime: 1,
         version: 'v1',
       },
-      capabilities: { read: true, write: true, requestFiles: true },
+      capabilities: {
+        read: true,
+        write: true,
+        requestFiles: true,
+        filePicker: true,
+        directoryListing: true,
+      },
       limits: { maxFileSize: 1, maxRequestBytes: 1 },
     } as unknown as RegistrationInit
     expect(() => new RegistrationClient(gate, editorInit)).toThrow(/register-mode/)

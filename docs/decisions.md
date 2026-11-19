@@ -104,6 +104,14 @@ glTF images as `Texture` properties and folds texture definitions into
 duplicate Textures/Images groups; each texture entry still carries its
 image URI, MIME type and resolved/missing status.
 
+M3 adds `@gltf-transform/extensions` **4.5.1** so re-serialization
+preserves extension payloads. Only extensions without a codec
+dependency are registered; a document declaring any other extension
+(such as Draco or Meshopt) stays read-only instead of losing data on
+save. Measured with the final M3 build: editor 911.28 kB minified /
+246.44 kB gzip, a total M3 delta of +113.57 kB / +25.57 kB against M2;
+the extension package alone accounts for +100.35 kB / +21.15 kB.
+
 ### D-06 Serialization policy — always re-serialize via gltf-transform
 
 **Decision.** Saving re-serializes the whole document: `.gltf` as `{ text }`,
@@ -113,7 +121,13 @@ pretty-printed); diffs can be large. No minimal-diff string patching.
 **Rationale.** One deterministic code path for both formats. Accepted
 trade-off for a repair tool.
 
-**Status.** Agreed.
+**Status.** Agreed. M3 clarifies the save policy: a save with no unsaved
+reference edit returns the baseline bytes unchanged; a save after a
+relink re-serializes the document. A `.glb` save embeds resolved external
+resources, so it refuses the save while any external reference is still
+missing. Documents that declare an extension without a registered
+handler stay read-only, because gltf-transform would otherwise drop the
+extension payload.
 
 ### D-07 Editor UI stack — Preact (React API)
 
@@ -146,10 +160,15 @@ in consent: the picker uses the existing `workspace:read`, while listing adds
 the separate `workspace:list`, which re-prompts users (C10). The choice
 belongs with the M3 UX, informed by the reference-repair flow.
 
-**Status.** Unblocked 2026-11-18. The shipped API is recorded in
-`docs/exo-editor-api-request.md` section 8, including its differences from
-the request. The SDK vendored here is `1.1.0` and must be refreshed to
-upstream `1.3.0` when M3 starts (D-13).
+**Status.** Resolved 2026-11-19. M3 ships **picker-only**: the shell-owned
+workspace picker through `editor.requestFiles()` with the existing
+`workspace:read`. `workspace:list` is not requested, so the manifest and
+the consent fingerprint stay unchanged and existing users are not
+re-prompted (C10). A manual workspace-path field remains the fallback on
+shells without the picker; either relink applies only after a successful
+read and trial reparse. The vendored SDK was refreshed unmodified from
+`1.1.0` to upstream `1.3.0` for `requestFiles()`. The shipped API is
+recorded in `docs/exo-editor-api-request.md` section 8.
 
 ### D-09 Validation — missing-reference checks only
 
@@ -210,13 +229,20 @@ claims the same glob.
 - **`contributes.configuration`** (workspace settings such as lighting or
   grid defaults) — deferred; would use the already-granted `config/changed`
   channel, no new permission needed.
-- **M3 UX and permission set**: choose picker, listing, or both in the M3
-  OpenSpec change. Only listing adds `workspace:list` and re-prompts every
-  user (C10); the picker needs no permission change. Refresh the vendored
-  SDK from `1.1.0` to upstream `1.3.0` at the same time.
+- **Draco/Meshopt editing** — those decoders are deliberately not bundled
+  for the document model in M3; affected documents stay read-only. A
+  later milestone can add the codec modules without changing the relink
+  UX.
 
 ## Change log
 
+- 2026-11-19 (1) M3 reference tweaks implemented: picker-only relink with
+  a manual fallback (no `workspace:list`, manifest unchanged), vendored
+  SDK refreshed unmodified to `1.3.0`, `@gltf-transform/extensions`
+  4.5.1 added for extension-preserving saves, dirty/pre-serialized save
+  with conflict protection, and a relink/conflict e2e suite. D-05 and
+  D-06 record the measured bundle and save clarifications; D-08 records
+  the picker-only choice.
 - 2026-11-18 (4) M2 structure explorer implemented: `@gltf-transform/core`
   4.5.1 added, workspace-backed document IO, lazy explorer model and
   sidebar/inspector, node focus, reference status, reload/disposal

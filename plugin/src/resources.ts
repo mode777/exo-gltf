@@ -109,6 +109,26 @@ export function resolveReferencePath(dir: string, uri: string): string | null {
   return normalizeWorkspacePath(combined)
 }
 
+/**
+ * Writes a workspace path as a glTF uri: relative to the document directory
+ * when the target is at or below it, root-absolute otherwise. Segments are
+ * percent-encoded so names with spaces, `#`, `?` or `%` stay valid URIs.
+ */
+export function referenceUri(documentDir: string, targetPath: string): string | null {
+  const target = normalizeWorkspacePath(targetPath)
+  const dir = normalizeWorkspacePath(documentDir)
+  if (target === null || dir === null) return null
+
+  const targetSegments = target.split('/').filter(Boolean)
+  const dirSegments = dir.split('/').filter(Boolean)
+  const insideDirectory = dirSegments.every((segment, index) => targetSegments[index] === segment)
+  const segments = insideDirectory ? targetSegments.slice(dirSegments.length) : targetSegments
+  if (segments.length === 0) return null
+
+  const encoded = segments.map((segment) => encodeURIComponent(segment)).join('/')
+  return insideDirectory ? encoded : `/${encoded}`
+}
+
 interface ReadableFile {
   readFile(path: string, encoding: 'binary'): Promise<{ bytes: ArrayBuffer }>
 }

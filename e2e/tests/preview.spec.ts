@@ -23,6 +23,7 @@ declare global {
       size(path: string): number
       touch(path: string): void
       write(path: string, content: string): void
+      text(path: string): string
       remove(path: string): void
       lastError?: string
     }
@@ -140,7 +141,9 @@ async function openFile(page: Page, path: string): Promise<FrameLocator> {
   for (const directory of segments.slice(0, -1)) {
     const row = treeRow(page, directory)
     if ((await row.getAttribute('aria-expanded')) !== 'true') {
-      await row.dblclick()
+      // The shell expands directories on a single click; a double-click would
+      // toggle them twice and leave the folder collapsed.
+      await row.click()
     }
     await expect(row).toHaveAttribute('aria-expanded', 'true')
   }
@@ -190,6 +193,25 @@ async function expandGroup(frame: FrameLocator, id: string): Promise<void> {
     await group.locator('.tree-group-row').click()
   }
   await expect(group).toHaveAttribute('aria-expanded', 'true')
+}
+
+async function relinkViaPicker(
+  page: Page,
+  frame: FrameLocator,
+  uri: string,
+  directory: string,
+  fileName: string,
+): Promise<void> {
+  await frame.locator(`[data-repair-uri="${uri}"] [data-action="relink"]`).click()
+  const dialog = page.getByRole('dialog', { name: 'Select workspace files' })
+  await expect(dialog).toBeVisible({ timeout: 20_000 })
+  if (directory) {
+    await dialog.locator('[data-picker-row]').filter({ hasText: `${directory}/` }).first().click()
+    await expect(dialog.locator('.exo-file-picker-crumbs')).toContainText(directory)
+  }
+  await dialog.locator('[data-picker-row]').filter({ hasText: fileName }).first().click()
+  await dialog.getByRole('button', { name: 'Select', exact: true }).click()
+  await expect(dialog).toBeHidden({ timeout: 20_000 })
 }
 
 function inspectorValue(frame: FrameLocator, label: string) {
@@ -400,6 +422,156 @@ test('missing buffer blocks the scene while the structure stays browsable', asyn
   await expect(missing.locator('.badge-missing')).toBeVisible()
   await missing.locator('.tree-row').click()
   await expect(inspectorValue(frame, 'Status')).toHaveText('missing')
+})
+
+test('relink repairs missing references, saves and reopens', async ({ page }) => {
+  const documentPath = 'relink/BoxTextured.gltf'
+  await bootstrap(page, [
+    documentPath,
+    'relink/assets/BoxTextured0.bin',
+    'relink/assets/CesiumLogoFlat.png',
+    'relink/assets/Box #1.png',
+  ])
+  const frame = await openFile(page, documentPath)
+  const saveTimes: number[] = []
+  page.on('console', (message) => {
+    const match = message.text().match(/EXO_GLTF_SAVE_MS (\d+)/)
+    if (match) saveTimes.push(Number(match[1]))
+  })
+  await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'error', { timeout: 60_000 })
+  await expect(frame.locator('.repairs')).toContainText('missing.bin')
+  await expect(frame.locator('.repairs')).toContainText('missing.png')
+
+  await test.step('relink the buffer and the texture', async () => {
+    await relinkViaPicker(page, frame, 'missing.bin', 'assets', 'BoxTextured0.bin')
+    await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'ready', { timeout: 30_000 })
+    await expect(frame.locator('[data-repair-uri="missing.bin"]')).toHaveAttribute(
+      'data-status',
+      'resolved',
+    )
+    await expect(frame.locator('canvas')).toBeVisible()
+    await expect(page.locator('.tab-close.is-dirty')).toHaveCount(1)
+
+    // Revert restores the original state and clears dirty; relinking again
+    // re-applies the repair.
+    await frame.locator('[data-repair-uri="missing.bin"] [data-action="revert"]').click()
+    await expect(frame.locator('[data-repair-uri="missing.bin"]')).toHaveAttribute(
+      'data-status',
+      'missing',
+    )
+    await expect(page.locator('.tab-close.is-dirty')).toHaveCount(0)
+    await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'error')
+
+    await relinkViaPicker(page, frame, 'missing.bin', 'assets', 'BoxTextured0.bin')
+    await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'ready', { timeout: 30_000 })
+    await expect(page.locator('.tab-close.is-dirty')).toHaveCount(1)
+
+    await relinkViaPicker(page, frame, 'missing.png', 'assets', 'CesiumLogoFlat.png')
+    await expect(frame.locator('[data-repair-uri="missing.png"]')).toHaveAttribute(
+      'data-status',
+      'resolved',
+    )
+    await expect(frame.locator('.notice-error')).toHaveCount(0)
+  })
+
+  await test.step('save the repaired document', async () => {
+    await page.locator('.tab-title').first().click()
+    await page.keyboard.press('Control+S')
+    await page.waitForFunction(
+      (p) => (window.__EXO_E2E__.writes[p] ?? 0) > 0,
+      `/${documentPath}`,
+      { timeout: 20_000 },
+    )
+    await expect(page.locator('.tab-close.is-dirty')).toHaveCount(0)
+
+    await expect.poll(() => saveTimes.length, { timeout: 10_000 }).toBeGreaterThan(0)
+    expect(saveTimes[0]).toBeLessThan(4_000)
+    console.log('EXO_E2E_SAVE_MS', saveTimes[0])
+
+    const saved = await page.evaluate(
+      (p) => window.__EXO_E2E__.text(p),
+      `/${documentPath}`,
+    )
+    const json = JSON.parse(saved) as {
+      buffers: Array<{ uri?: string }>
+      images: Array<{ uri?: string }>
+    }
+    expect(json.buffers[0].uri).toBe('assets/BoxTextured0.bin')
+    expect(json.images[0].uri).toBe('assets/CesiumLogoFlat.png')
+  })
+
+  await test.step('reopen the saved file', async () => {
+    await page.locator('.tab-close').first().click()
+    await expect(page.locator(iframeSelector)).toHaveCount(0, { timeout: 15_000 })
+    const reopened = await openFixture(page, documentPath)
+    await expect(reopened.locator('canvas')).toBeVisible()
+    await expect(reopened.locator('.repairs')).toHaveCount(0)
+    await expectGroupCount(reopened, 'resources', 2)
+    await expandGroup(reopened, 'resources')
+    await expect(reopened.locator('[data-entry-id="resources:0"]')).toContainText('resolved')
+    await expect(reopened.locator('[data-entry-id="resources:1"]')).toContainText('resolved')
+  })
+})
+
+test('external change while dirty keeps repairs until explicit reload', async ({ page }) => {
+  const documentPath = 'relink/BoxTextured.gltf'
+  await bootstrap(page, [
+    documentPath,
+    'relink/assets/BoxTextured0.bin',
+    'relink/assets/CesiumLogoFlat.png',
+  ])
+  const frame = await openFile(page, documentPath)
+  await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'error', { timeout: 60_000 })
+
+  await relinkViaPicker(page, frame, 'missing.bin', 'assets', 'BoxTextured0.bin')
+  await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'ready', { timeout: 30_000 })
+  await expect(page.locator('.tab-close.is-dirty')).toHaveCount(1)
+
+  const source = JSON.parse(
+    readFileSync(join(repoRoot, 'plugin', 'test-assets', documentPath), 'utf8'),
+  ) as Record<string, unknown> & { asset: Record<string, unknown> }
+  source.asset.generator = 'external writer'
+  await page.evaluate(
+    ({ p, content }) => {
+      window.__EXO_E2E__.write(p, content)
+      window.dispatchEvent(new Event('focus'))
+    },
+    { p: `/${documentPath}`, content: JSON.stringify(source) },
+  )
+
+  const notice = frame.locator('.notice', { hasText: 'The file changed on disk' })
+  await expect(notice).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.tab-close.is-dirty')).toHaveCount(1)
+  await expect(frame.locator('[data-repair-uri="missing.bin"]')).toHaveAttribute(
+    'data-status',
+    'resolved',
+  )
+
+  // A save against the externally changed version is rejected; the repair
+  // buffer and dirty flag survive.
+  await page.locator('.tab-title').first().click()
+  await page.keyboard.press('Control+S')
+  await expect(
+    frame.locator('.notice-error', { hasText: 'Saving the file failed' }),
+  ).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.tab-close.is-dirty')).toHaveCount(1)
+  await expect(frame.locator('[data-repair-uri="missing.bin"]')).toHaveAttribute(
+    'data-status',
+    'resolved',
+  )
+
+  await notice.locator('[data-notice-action="reload"]').click()
+  await expect(frame.locator('[data-repair-uri="missing.bin"]')).toHaveAttribute(
+    'data-status',
+    'missing',
+    { timeout: 30_000 },
+  )
+  await expect(frame.locator('[data-repair-uri="missing.png"]')).toHaveAttribute(
+    'data-status',
+    'missing',
+  )
+  await expect(page.locator('.tab-close.is-dirty')).toHaveCount(0)
+  await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'error')
 })
 
 test('oversized file shows the too-large state', async ({ page }) => {
