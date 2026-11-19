@@ -10,5 +10,5 @@ dirty. Only explicit reference-repair actions may edit the document.
 
 #### Scenario: Save while exploring
 
-- **WHEN** the shell requests a save with the explorer open
+- **WHEN** the shell requests a save with the explorer open and no reference edits
 - **THEN** the written file is byte-for-byte unchanged and the tab shows no dirty indicator
