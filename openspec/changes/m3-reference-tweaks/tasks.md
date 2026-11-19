@@ -27,9 +27,9 @@
 
 ## 5. Integration and verification
 
-- [ ] 5.1 Run the full pipeline (build → e2e-local → deploy → e2e-deployed), record the run URL, the measured save latency and the bundle deltas in `openspec/changes/m3-reference-tweaks/verification.md`, and verify the deployed relink/save/reopen and conflict steps pass
+- [x] 5.1 Run the full pipeline (build → e2e-local → deploy → e2e-deployed), record the run URL, the measured save latency and the bundle deltas in `openspec/changes/m3-reference-tweaks/verification.md`, and verify the deployed relink/save/reopen and conflict steps pass
 - [x] 5.2 Update `docs/decisions.md`: D-08 records the picker-only choice and unchanged consent, D-05 records `@gltf-transform/extensions` 4.5.1 and the measured bundle delta, D-06 notes the clean-save pass-through and read-only fallback for unsupported extensions; verify the register matches the lockfile, manifest and build output
-- [ ] 5.3 Verify the deployed manifest still declares only `workspace:read`, `workspace:write` and `events:subscribe`, contains no `workspace:list`, and that the deployed e2e consent flow shows the unchanged permission set
+- [x] 5.3 Verify the deployed manifest still declares only `workspace:read`, `workspace:write` and `events:subscribe`, contains no `workspace:list`, and that the deployed e2e consent flow shows the unchanged permission set
 
 ## Workflow follow-up
 
