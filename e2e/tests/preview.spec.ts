@@ -160,7 +160,11 @@ async function openFile(page: Page, path: string): Promise<FrameLocator> {
   return page.frameLocator(iframeSelector)
 }
 
-async function openFixture(page: Page, path: string): Promise<FrameLocator> {
+async function openWithPhase(
+  page: Page,
+  path: string,
+  phase: 'ready' | 'error',
+): Promise<FrameLocator> {
   const frame = page.frameLocator(iframeSelector)
   // Registration is asynchronous: opening a matching file before the plugin
   // is ready yields the shell's text fallback, which never auto-switches.
@@ -173,7 +177,7 @@ async function openFixture(page: Page, path: string): Promise<FrameLocator> {
       .then(() => true)
       .catch(() => false)
     if (mounted) {
-      await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'ready', {
+      await expect(frame.locator('.app')).toHaveAttribute('data-phase', phase, {
         timeout: 60_000,
       })
       return frame
@@ -182,6 +186,10 @@ async function openFixture(page: Page, path: string): Promise<FrameLocator> {
     await page.waitForTimeout(1_500)
   }
   throw new Error(`The plugin editor never mounted for ${path}.`)
+}
+
+async function openFixture(page: Page, path: string): Promise<FrameLocator> {
+  return openWithPhase(page, path, 'ready')
 }
 
 function explorerGroup(frame: FrameLocator, id: string) {
@@ -419,7 +427,7 @@ test('missing texture renders a placeholder and is flagged in the explorer', asy
 
 test('missing buffer blocks the scene while the structure stays browsable', async ({ page }) => {
   await bootstrap(page, ['missing-buffer/scene.gltf'])
-  const frame = await openFile(page, 'missing-buffer/scene.gltf')
+  const frame = await openWithPhase(page, 'missing-buffer/scene.gltf', 'error')
   await expect(frame.locator('.notice-error')).toContainText('missing.bin', { timeout: 60_000 })
   await expect(frame.locator('canvas')).toHaveCount(0)
 
@@ -441,13 +449,12 @@ test('relink repairs missing references, saves and reopens', async ({ page }) =>
     'relink/assets/CesiumLogoFlat.png',
     'relink/assets/Box #1.png',
   ])
-  const frame = await openFile(page, documentPath)
+  const frame = await openWithPhase(page, documentPath, 'error')
   const saveTimes: number[] = []
   page.on('console', (message) => {
     const match = message.text().match(/EXO_GLTF_SAVE_MS (\d+)/)
     if (match) saveTimes.push(Number(match[1]))
   })
-  await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'error', { timeout: 60_000 })
   await expect(frame.locator('.repairs')).toContainText('missing.bin')
   await expect(frame.locator('.repairs')).toContainText('missing.png')
 
@@ -529,8 +536,7 @@ test('external change while dirty keeps repairs until explicit reload', async ({
     'relink/assets/BoxTextured0.bin',
     'relink/assets/CesiumLogoFlat.png',
   ])
-  const frame = await openFile(page, documentPath)
-  await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'error', { timeout: 60_000 })
+  const frame = await openWithPhase(page, documentPath, 'error')
 
   await relinkViaPicker(page, frame, 'missing.bin', 'assets', 'BoxTextured0.bin')
   await expect(frame.locator('.app')).toHaveAttribute('data-phase', 'ready', { timeout: 30_000 })
@@ -585,7 +591,7 @@ test('external change while dirty keeps repairs until explicit reload', async ({
 
 test('oversized file shows the too-large state', async ({ page }) => {
   await bootstrap(page, ['large/oversized.glb'])
-  const frame = await openFile(page, 'large/oversized.glb')
+  const frame = await openWithPhase(page, 'large/oversized.glb', 'error')
   await expect(frame.locator('.notice-error')).toContainText('exceeds the editor size limit', {
     timeout: 60_000,
   })
