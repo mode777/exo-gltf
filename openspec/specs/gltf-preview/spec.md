@@ -55,9 +55,10 @@ fetching decoders from third-party origins.
 
 ### Requirement: External references resolve through the workspace
 
-The plugin SHALL resolve external buffer and texture URIs of a `.gltf`
-against the opened file's directory within the workspace and read them
-through the shell's file-read facility only.
+The plugin SHALL resolve external buffer and texture URIs within the
+workspace — relative URIs against the opened file's directory and
+root-absolute URIs as given — and read them through the shell's file-read
+facility only.
 
 #### Scenario: External buffer and textures present
 
@@ -85,37 +86,68 @@ state naming the file, instead of a generic failure.
 - **WHEN** the shell reports the read of the opened file as too large
 - **THEN** the editor shows a too-large notice for that file and performs no further read attempts on it
 
-### Requirement: Pass-through save with no dirty state
+### Requirement: Save reflects the current document
 
-The plugin SHALL NOT report itself dirty and SHALL answer every save
-request with the exact bytes last delivered by the shell for the open
-document, within the shell's save-response timeout.
+The plugin SHALL answer every save request within the shell's
+save-response timeout: with the current saved baseline — the bytes last
+read, or the last successfully saved output — while no reference edit is
+unsaved, and otherwise with the current document re-serialized in its
+original format (`.gltf` as text, `.glb` as bytes).
 
-#### Scenario: Shell-initiated save
+#### Scenario: Unmodified save
 
-- **WHEN** the shell requests a save while the preview is open
-- **THEN** the plugin returns content identical to what was read and the written file is byte-for-byte unchanged
+- **WHEN** the shell requests a save and no reference edit is unsaved
+- **THEN** the written file is byte-for-byte identical to the current baseline and the tab is not dirty
 
-#### Scenario: Tab state
+#### Scenario: Edited save
 
-- **WHEN** the preview is open and unmodified
-- **THEN** the tab never shows a dirty indicator
+- **WHEN** the shell requests a save after a reference was relinked
+- **THEN** the plugin returns the re-serialized document in its original format containing the new URI and the saved file reopens cleanly in the plugin
+
+#### Scenario: Rapid successive relinks
+
+- **WHEN** a save request follows several quick relinks
+- **THEN** the plugin answers from the pre-serialized state of the latest edit without exceeding the save-response timeout
+
+#### Scenario: Serialization fails
+
+- **WHEN** the edited document cannot be re-serialized
+- **THEN** the plugin shows a serialization-failure notice, sends no content, keeps the in-memory document intact, and leaves the tab dirty
+
+### Requirement: Saving preserves extension data
+
+The plugin SHALL register its supported glTF extensions for reading and
+writing, SHALL preserve their declarations and payloads when
+re-serializing, and SHALL NOT silently drop an extension it cannot
+serialize.
+
+#### Scenario: Extension-bearing asset saved
+
+- **WHEN** a document whose extensions the plugin supports is relinked and saved
+- **THEN** the saved file keeps those extension declarations and payloads and reopens with the same structure and rendering
 
 ### Requirement: External change reload
 
-The plugin SHALL reload and re-render the preview when the shell reports the
-open file changed externally, and SHALL show a notice when it was deleted,
-without silent retry loops.
+The plugin SHALL reload and re-render the preview when the shell reports
+the open file changed externally and no reference edit is unsaved, SHALL
+keep the current content and offer an explicit reload when an edit is
+unsaved, and SHALL show a notice when the file was deleted, without
+silent retry loops.
 
 #### Scenario: File changed on disk
 
-- **WHEN** the shell delivers an external change notification for the open file
+- **WHEN** the shell delivers an external change notification for the open file and the document has no unsaved edits
 - **THEN** the plugin re-reads the file and the preview reflects the new content
 
 #### Scenario: File deleted on disk
 
 - **WHEN** the shell reports the open file deleted
 - **THEN** the plugin shows a deletion notice and keeps its last rendered state without further read attempts
+
+#### Scenario: Unsaved edits exist when the file changes
+
+- **WHEN** the shell delivers an external change notification while a reference edit is unsaved
+- **THEN** the plugin keeps the edited content and dirty state, shows a notice, and does not re-read the file until the user explicitly reloads
 
 ### Requirement: Disposal releases all viewport resources
 

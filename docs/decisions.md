@@ -236,6 +236,9 @@ claims the same glob.
 
 ## Change log
 
+- 2026-11-19 (2) First iteration complete: M2 structure explorer and M3
+  reference tweaks archived on 2026-11-19. Main specs now cover
+  `gltf-preview`, `gltf-structure-explorer` and `gltf-reference-tweaks`.
 - 2026-11-19 (1) M3 reference tweaks implemented: picker-only relink with
   a manual fallback (no `workspace:list`, manifest unchanged), vendored
   SDK refreshed unmodified to `1.3.0`, `@gltf-transform/extensions`

@@ -8,8 +8,7 @@ next begins. Work on a milestone is managed as an OpenSpec change under
 
 ```text
 M1 open + preview   ->   M2 structure explorer   ->   M3 reference tweaks
- (archived 2026-11-18)      (verified; archive           (verified 2026-11-19;
-                             pending)                      archive pending M2)
+ (archived 2026-11-18)      (archived 2026-11-19)       (archived 2026-11-19)
 ```
 
 ## M1 — Open + 3D preview
@@ -52,8 +51,9 @@ read limit shows the too-large state.
 
 ## M2 — Structure explorer
 
-**Status.** Implemented and verified; archive pending. M3's archive depends
-on this change landing in the main specs first.
+**Status.** Delivered, verified (see
+`openspec/changes/archive/2026-11-19-m2-structure-explorer/verification.md`)
+and archived on 2026-11-19.
 
 **Goal.** Users orient themselves inside the file: the asset's glTF
 structure is browsable next to the viewport.
@@ -78,15 +78,15 @@ nodes navigates the viewport; missing references are visibly flagged.
 **Goal.** Resolve missing external references (the "small tweaks" of the
 repo goals) and save the repaired file.
 
-**Unblocked 2026-11-18. Delivered and verified 2026-11-19** (see
-`openspec/changes/m3-reference-tweaks/verification.md`). The shipped UX is
-**picker-only**: the shell picker uses the existing `workspace:read`, the
-manual path field remains the old-shell fallback, and `workspace:list` is
-not requested (D-08). The vendored SDK is now `1.3.0`. Archive is pending
-M2's archive. exo-editor shipped the requested API: the shell-owned
-workspace picker (`plugin/request-files` / `shell/files-selected`,
-SDK 1.2.0) and permissioned one-level directory listing
-(`plugin/request-list` / `shell/list-result`, manifest permission
+**Status.** Delivered, verified (see
+`openspec/changes/archive/2026-11-19-m3-reference-tweaks/verification.md`)
+and archived on 2026-11-19. The shipped UX is **picker-only**: the shell
+picker uses the existing `workspace:read`, the manual path field remains
+the old-shell fallback, and `workspace:list` is not requested (D-08). The
+vendored SDK is now `1.3.0`. exo-editor shipped the requested API: the
+shell-owned workspace picker (`plugin/request-files` /
+`shell/files-selected`, SDK 1.2.0) and permissioned one-level directory
+listing (`plugin/request-list` / `shell/list-result`, manifest permission
 `workspace:list`, SDK 1.3.0). See
 [docs/exo-editor-api-request.md](exo-editor-api-request.md) section 8 for the
 shipped shape and differences. M1 is archived; M2 is unaffected.
