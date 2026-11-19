@@ -120,6 +120,15 @@ async function bootstrap(page: Page, fixturePaths: string[]): Promise<void> {
   await expect(consentTitle).toBeVisible({ timeout: 60_000 })
   await expect(consentTitle).toContainText('glTF Viewer')
   await expect(page.getByText('**/*.{gltf,glb}')).toBeVisible()
+  const consent = page.locator('.exo-consent')
+  await expect(consent).toContainText(
+    'Read workspace files it opens or requests, including files you select in its picker.',
+  )
+  await expect(consent).toContainText('Write changes to workspace files when you save.')
+  await expect(consent).toContainText(
+    'Receive shell notifications such as theme and file changes.',
+  )
+  await expect(consent).not.toContainText('List folder contents and file names')
   await page.getByRole('button', { name: 'Allow plugin' }).click()
 
   await expect(page.getByText('e2e-workspace · folder')).toBeVisible({ timeout: 30_000 })
